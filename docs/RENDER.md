@@ -17,7 +17,7 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 
 | Ce qu'il faut | Où | Coût |
 |---|---|---|
-| Compte GitHub + ce repo poussé | ✅ déjà fait (branche `arena/01a0a0aa-ai-improves-itself`) | 0 $ |
+| Compte GitHub + ce repo poussé | ✅ déjà fait (contenu sur la branche `main`) | 0 $ |
 | Compte Render | [render.com](https://render.com) → *Sign up with GitHub* | — |
 | Clé API **Mistral** (moteur principal) | [console.mistral.ai/cle](https://console.mistral.ai/cle) → plan gratuit « La Plateforme » | 0 $ |
 | (optionnel) Clé Gemini / Groq / OpenRouter | fallbacks automatiques | 0 $ |
@@ -28,11 +28,9 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 > **lire les repos privés** (case « Private repositories »). Sans ça, le repo ne sera
 > pas listé.
 
-> **Quelle branche ?** Le Blueprint se déploie depuis **une seule branche**.
-> - Soit tu choisis la branche `arena/01a0a0aa-ai-improves-itself` (le contenu actuel),
-> - soit tu crées d'abord une **Pull Request** (GitHub propose le lien automatiquement à
->   chaque push) et la merges sur `main`, puis tu déploies depuis `main` (recommandé pour
->   la suite — tout le repo pointe sur `main`).
+> **Quelle branche ?** Le Blueprint se déploie depuis **une seule branche** : `main`
+> (tout le contenu est mergé dessus). Chaque push sur `main` redéploie les 2 services
+> automatiquement (`autoDeploy: true`).
 
 ---
 

@@ -61,7 +61,9 @@ class LocalStore:
         with _lock:
             items = self.list(name)
             item = dict(item)
-            item.setdefault("id", uuid.uuid4().hex[:12])
+            # UUID complet (32 hex) : valide côté Postgres (schéma Supabase en uuid),
+            # contrairement à l'ancien hex[:12].
+            item.setdefault("id", uuid.uuid4().hex)
             item.setdefault("created_at", time.time())
             items.append(item)
             _save(name, items)

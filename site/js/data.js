@@ -5,7 +5,10 @@ async function render() {
   const res = await apiGet("/api/data/entries");
   const items = res.entries || [];
   const byCat = {};
-  items.forEach((e) => { (byCat[e.category || "autres"] = byCat[e.category || "autres"] || 0)++; });
+  items.forEach((e) => {
+    const c = e.category || "autres";
+    byCat[c] = (byCat[c] || 0) + 1;
+  });
   document.getElementById("cats").innerHTML = Object.entries(byCat)
     .map(([c, n]) => `<span class="chip">${esc(c)} · ${n}</span>`)
     .join(" ");

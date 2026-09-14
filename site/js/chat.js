@@ -48,7 +48,16 @@ async function send(text) {
     addMsg("ai", esc(res.reply));
     history.push({ role: "assistant", content: res.reply });
     if (res.warnings && res.warnings.length) {
+      // Visible dans le chat (avant : console uniquement) : l'utilisateur doit
+      // savoir qu'un provider a échoué et qu'un fallback a pris le relais.
       console.warn("warnings", res.warnings);
+      const w = document.createElement("div");
+      w.className = "event";
+      w.innerHTML =
+        `<span class="e-title">⚠️ Fallback de provider</span>` +
+        `<div class="e-detail">${esc(res.warnings.join(" · "))}</div>`;
+      chatLog.appendChild(w);
+      chatLog.scrollTop = chatLog.scrollHeight;
     }
     refreshSide();
   } catch (e) {

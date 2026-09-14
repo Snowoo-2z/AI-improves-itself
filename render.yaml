@@ -23,6 +23,10 @@
 #    - runtime : requis pour tout service (node / python / docker /
 #      image / static). Un service Dockerfile DOIT déclarer
 #      runtime: docker (pas d'auto-détection dans les Blueprints).
+#    - port : Render injecte son propre port dans la variable d'env PORT.
+#      Le scraper DOIT l'écouter (Dockerfile : `--port ${PORT:-8000}`),
+#      sinon le health-check /health échoue et le service passe en 502.
+#      Le core écoute déjà `$PORT` dans son startCommand.
 # ============================================================
 
 services:

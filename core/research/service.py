@@ -25,7 +25,12 @@ def create_task(kind: str, target: str, reason: str = "", by: str = "human") -> 
 
 def add_result(kind: str, data: dict, task_id: str | None = None) -> dict:
     s = store_module.get_store()
-    item = s.add("research_results", {"kind": kind, "data": data, "status": "done"})
+    # task_id est persisté DANS le résultat : la page /colab l'affiche pour
+    # rattacher le résultat à sa tâche, et Supabase utilise la FK research_results.task_id.
+    item = s.add(
+        "research_results",
+        {"kind": kind, "data": data, "task_id": task_id, "status": "done"},
+    )
     if task_id:
         s.update("research_tasks", task_id, {"status": "done", "updated_at": _now_iso()})
     return item

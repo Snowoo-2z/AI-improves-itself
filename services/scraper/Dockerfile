@@ -13,7 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY . .
 
+# Render impose son propre port via la variable d'env PORT : le service DOIT
+# l'écouter (sinon le health-check échoue → le service marque 502/crash-loop).
+# Local (docker run sans PORT) : repli sur 8000.
 ENV PORT=8000
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
