@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +32,13 @@ class BaseProvider:
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ProviderResult:
         raise NotImplementedError
 
+    def ping(self) -> None:
+        """Test de connexion BON MARCHÉ (appel 1 token, timeout courte).
+
+        Ne pas surcharger pour un provider 100 % local : il est toujours dispo.
+        """
+        self.chat([{"role": "user", "content": "ping"}])
+
 
 class OpenAICompatProvider(BaseProvider):
     """Client minimaliste pour toute API compatible OpenAI (Mistral, Groq,
@@ -42,6 +50,19 @@ class OpenAICompatProvider(BaseProvider):
         self.api_key = api_key
         self.model = model
 
+    def _post(self, body: dict[str, Any], timeout: float) -> dict:
+        resp = httpx.post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=body,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ProviderResult:
         body: dict[str, Any] = {
             "model": self.model,
@@ -50,23 +71,29 @@ class OpenAICompatProvider(BaseProvider):
         }
         if tools:
             body["tools"] = tools
-        resp = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-            timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()["choices"][0]["message"]
-        tool_calls = data.get("tool_calls") or None
+        data = self._post(body, timeout=120)
+        try:
+            message = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError(f"réponse inattendue de {self.name} : {str(data)[:200]}") from exc
+        tool_calls = message.get("tool_calls") or None
         return ProviderResult(
-            content=data.get("content") or "",
+            content=message.get("content") or "",
             tool_calls=tool_calls,
             provider=self.name,
-            raw=resp.json(),
+            raw=data,
+        )
+
+    def ping(self) -> None:
+        """1 token, 20 s max : juste vérifier que la clé + l'endpoint répondent."""
+        self._post(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+                "temperature": 0,
+            },
+            timeout=20,
         )
 
 
@@ -103,6 +130,10 @@ def _tool_call(name: str, arguments: dict) -> dict:
 
 class LocalDemoProvider(BaseProvider):
     name = "demo-local"
+
+    def ping(self) -> None:
+        """100 % local : toujours disponible, aucun test réseau à faire."""
+        return None
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ProviderResult:
         system = next((m["content"] for m in messages if m["role"] == "system"), "")
@@ -235,14 +266,14 @@ def build_chain() -> list[BaseProvider]:
                 "gemini",
                 "https://generativelanguage.googleapis.com/v1beta/openai",
                 gemini_key,
-                env("GEMINI_MODEL", "gemini-2.0-flash"),
+                env("GEMINI_MODEL", "gemini-2.5-flash"),
             )
         )
     groq_key = env("GROQ_API_KEY")
     if groq_key:
         chain.append(
             OpenAICompatProvider(
-                "groq", "https://groq.com/openai/v1", groq_key, env("GROQ_MODEL", "llama-3.3-70b-versatile")
+                "groq", "https://api.groq.com/openai/v1", groq_key, env("GROQ_MODEL", "llama-3.3-70b-versatile")
             )
         )
     openrouter_key = env("OPENROUTER_API_KEY")
@@ -259,6 +290,63 @@ def build_chain() -> list[BaseProvider]:
     return chain
 
 
+# ---------------------------------------------------------------------------
+# Sélection du provider ACTIF (mise en cache).
+#
+# Avant la correction : CHAQUE message du chat déclenchait un « ping » complet
+# (vrai appel API avec le prompt système en entier) pour tester le provider →
+# coût/latence doublés à chaque message. Maintenant : la sélection se fait UNE
+# fois (au premier besoin) avec un ping de 1 token, le résultat est mis en
+# cache, et le cache est invalidé si le provider échoue en cours de route
+# (retour automatique sur demo-local pour le message en cours).
+# ---------------------------------------------------------------------------
+_selection_lock = threading.Lock()
+_active_provider: BaseProvider | None = None
+_active_provider_errors: list[str] = []
+
+
+def get_active_provider() -> tuple[BaseProvider, list[str]]:
+    """Renvoyer le premier provider disponible (testé UNE fois, puis mis en cache).
+
+    Retourne (provider, erreurs_des_providers_sautés).
+    """
+    global _active_provider, _active_provider_errors
+    with _selection_lock:
+        if _active_provider is not None:
+            return _active_provider, list(_active_provider_errors)
+        chain = build_chain()
+        errors: list[str] = []
+        for candidate in chain:
+            try:
+                candidate.ping()
+            except Exception as exc:  # noqa: BLE001 — on saute ce provider
+                errors.append(f"{candidate.name}: {exc}")
+                continue
+            _active_provider = candidate
+            _active_provider_errors = errors
+            return candidate, list(errors)
+        # Tous les providers cloud sont en échec : on s'accroche au mode démo
+        # (il ne lève jamais d'exception) pour ne jamais bloquer le site.
+        _active_provider = chain[-1]
+        _active_provider_errors = errors
+        return _active_provider, list(errors)
+
+
+def invalidate_provider_cache() -> None:
+    """Le provider actif vient d'échouer : on re-testera la chaîne au prochain message."""
+    global _active_provider
+    with _selection_lock:
+        _active_provider = None
+
+
+def active_provider_errors() -> list[str]:
+    """Erreurs constatées lors de la sélection (vide tant que rien n'a été testé)."""
+    return list(_active_provider_errors) if _active_provider is not None else []
+
+
 def primary_provider_name() -> str:
-    chain = build_chain()
-    return chain[0].name
+    """Nom du provider à afficher : celui réellement actif (une fois sélectionné),
+    sinon le premier configuré (sans appel réseau → fast, utilisable par /api/status)."""
+    if _active_provider is not None:
+        return _active_provider.name
+    return build_chain()[0].name

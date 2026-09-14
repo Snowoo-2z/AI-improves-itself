@@ -14,14 +14,21 @@ async function renderTasks() {
       <thead><tr><th>Kind</th><th>Cible</th><th>Pourquoi</th><th>Par</th><th>Statut</th></tr></thead>
       <tbody>${items
         .map(
-          (t) => `
+          (t) => {
+            const target = String(t.target || "");
+            // Seule une cible http(s) est cliquable (une requête de recherche ne l'est pas).
+            const cell = /^https?:\/\//i.test(target)
+              ? `<a href="${esc(target)}" target="_blank" rel="noopener">${esc(target.slice(0, 70))}${target.length > 70 ? "…" : ""}</a>`
+              : esc(target.slice(0, 70)) + (target.length > 70 ? "…" : "");
+            return `
           <tr>
             <td>${badge(t.kind)}</td>
-            <td class="mono small"><a href="${esc(t.target)}" target="_blank" rel="noopener">${esc(t.target.slice(0, 70))}${t.target.length > 70 ? "…" : ""}</a></td>
+            <td class="mono small">${cell}</td>
             <td class="small muted">${esc(t.reason || "—")}</td>
             <td>${t.by === "ai" ? '<span class="badge ai">🤖 IA</span>' : "<span class='badge'>humain</span>"}</td>
             <td>${badge(t.status)}</td>
-          </tr>`
+          </tr>`;
+          }
         )
         .join("")}</tbody>
     </table>`;

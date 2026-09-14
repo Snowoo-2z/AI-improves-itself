@@ -8,7 +8,9 @@ Sécurité : domaine whitelist optionnel (ENV ALLOWED_DOMAINS), taille limitée.
 """
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import time
 from urllib.parse import urlparse
 
@@ -32,6 +34,51 @@ def _allowed(url: str) -> bool:
     return any(host == d or host.endswith("." + d) for d in (x.strip() for x in allowed.split(",") if x.strip()))
 
 
+def _forbidden_target(url: str) -> str | None:
+    """Garde-fou anti-SSRF : le service est public, il ne doit jamais servir
+    de proxy vers le réseau interne (boucle locale, lien local 169.254.x.x —
+    ex. la metadata cloud —, privées RFC1918, réservées, noms d'hôtes IPv6
+    internes, etc.). Renvoie une raison si la cible est interdite, sinon None.
+    """
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return "hôte vide"
+    if host == "localhost" or host.endswith(".local") or host.endswith(".internal"):
+        return "nom d'hôte interne"
+    # Hôte qui est lui-même une adresse IP (pas besoin de resolver) ?
+    try:
+        ip = ipaddress.ip_address(host)
+        if _is_blocked_ip(ip):
+            return "adresse IP interne/réservée"
+        return None
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return "domaine inconnu"
+    if not infos:
+        return "domaine inconnu"
+    for info in infos:
+        try:
+            if _is_blocked_ip(ipaddress.ip_address(info[4][0])):
+                return "résout vers une adresse interne/réservée"
+        except ValueError:
+            return "adresse invalide"
+    return None
+
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_unspecified
+        or ip.is_multicast
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "scraper-chromium", "ts": time.time()}
@@ -43,29 +90,34 @@ def scrape(req: ScrapeRequest) -> dict:
 
     if not req.url.lower().startswith(("http://", "https://")):
         return {"ok": False, "error": "url doit commencer par http(s)://"}
+    forbidden = _forbidden_target(req.url)
+    if forbidden:
+        return {"ok": False, "error": f"cible interdite (anti-SSRF) : {forbidden}"}
     if not _allowed(req.url):
         return {"ok": False, "error": "domaine non autorisé (ALLOWED_DOMAINS)"}
 
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-                ),
-                viewport={"width": 1366, "height": 900},
-            )
-            page = context.new_page()
-            page.goto(req.url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(req.wait_ms)
             try:
-                page.wait_for_load_state("networkidle", timeout=8000)
-            except Exception:  # noqa: BLE001 — pas bloquant
-                pass
-            title = page.title()
-            text = page.evaluate("() => document.body ? document.body.innerText : ''")
-            browser.close()
+                context = browser.new_context(
+                    user_agent=(
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                    ),
+                    viewport={"width": 1366, "height": 900},
+                )
+                page = context.new_page()
+                page.goto(req.url, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_timeout(req.wait_ms)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:  # noqa: BLE001 — pas bloquant
+                    pass
+                title = page.title()
+                text = page.evaluate("() => document.body ? document.body.innerText : ''")
+            finally:
+                browser.close()  # ne fuit pas le binaire Chromium en cas d'erreur
         return {
             "ok": True,
             "url": req.url,

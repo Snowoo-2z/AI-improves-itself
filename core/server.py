@@ -11,21 +11,27 @@ Démarrage (depuis la racine du repo) :
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-
-from core import store as store_module
-from core.ai.chat import handle_chat
-from core.ai.config import env
-from core.ai.providers import primary_provider_name
-from core.prompt_system import registry
-from core.research import service as research
-from core.skills import manager as skills_manager
-
+# Permet `python core/server.py` (commande documentée dans le README) : la racine
+# du repo doit être importable pour charger le paquet `core.*`.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from core import store as store_module  # noqa: E402
+from core.ai.chat import handle_chat  # noqa: E402
+from core.ai.config import env  # noqa: E402
+from core.ai import providers  # noqa: E402
+from core.prompt_system import registry  # noqa: E402
+from core.research import service as research  # noqa: E402
+from core.skills import manager as skills_manager  # noqa: E402
+
 SITE_DIR = os.path.join(REPO_ROOT, "site")
 COLAB_DIR = os.path.join(REPO_ROOT, "colab")
 
@@ -70,9 +76,11 @@ class ResearchResult(BaseModel):
 def status() -> dict:
     s = store_module.get_store()
     main = registry.get_current("main")
+    provider_name = providers.primary_provider_name()
     return {
-        "primary_provider": primary_provider_name(),
-        "demo_mode": primary_provider_name() == "demo-local",
+        "primary_provider": provider_name,
+        "demo_mode": provider_name == "demo-local",
+        "provider_errors": providers.active_provider_errors(),
         "prompt_main_version": main.get("version"),
         "prompt_updated_by": main.get("updated_by"),
         "prompts": [
@@ -179,13 +187,24 @@ def research_result_add(req: ResearchResult) -> dict:
     return {"ok": True, "id": item.get("id")}
 
 
+def _safe_int(value: Any, default: int, lo: int, hi: int) -> int:
+    """Interprète une valeur int tolérante (JSON), bornée à [lo, hi]."""
+    try:
+        v = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, v))
+
+
 @app.post("/api/research/scrape")
 def research_scrape(payload: dict) -> dict:
     """Scraper une URL via le service Chromium (déployé sur Render)."""
     url = str(payload.get("url", "")).strip()
     if not url.lower().startswith(("http://", "https://")):
         raise HTTPException(400, "url invalide")
-    return research.scrape_via_service(url, int(payload.get("wait_ms", 2000)), int(payload.get("max_chars", 12000)))
+    wait_ms = _safe_int(payload.get("wait_ms", 2000), 2000, 0, 15000)
+    max_chars = _safe_int(payload.get("max_chars", 12000), 12000, 200, 60000)
+    return research.scrape_via_service(url, wait_ms, max_chars)
 
 
 @app.get("/api/data/entries")
@@ -203,4 +222,6 @@ app.mount("/", StaticFiles(directory=SITE_DIR, html=True), name="site")
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("core.server:app", host="0.0.0.0", port=int(env("PORT", "8000") or 8000), reload=False)
+    # `app` directement (aucun re-import par chemin de module → robuste quelle
+    # que soit la façon dont le script est lancé).
+    uvicorn.run(app, host="0.0.0.0", port=int(env("PORT", "8000") or 8000), reload=False)

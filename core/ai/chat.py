@@ -16,7 +16,7 @@ from core import store as store_module
 from core.prompt_system import registry
 from core.skills import manager as skills_manager
 
-from .providers import build_chain
+from .providers import build_chain, get_active_provider, invalidate_provider_cache
 
 MAX_TOOL_ITERATIONS = 6
 
@@ -80,31 +80,15 @@ def handle_chat(history: list[dict]) -> dict:
     chosen = registry.select_for_user_input(user_text)
     system = registry.assemble_system_prompt(chosen)
 
-    chain = build_chain()
     messages: list[dict] = [{"role": "system", "content": system}, *history]
     tools = skills_manager.to_openai_tools()
 
     events: list[dict] = []
     reply = ""
-    provider_name = chain[0].name
-    errors: list[str] = []
 
-    # --- Choix du provider (fallback automatique) ---
-    provider = None
-    for candidate in chain:
-        try:
-            provider = candidate
-            provider.chat(
-                [messages[0]] + [{"role": "user", "content": "ping"}],
-                tools=None,
-            )
-            break
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{candidate.name}: {exc}")
-            provider = None
-    if provider is None:
-        provider = chain[-1]  # demo-local : ne lève pas d'erreur
-        provider_name = provider.name
+    # --- Choix du provider (sélection testée UNE fois par process, puis en cache) ---
+    provider, errors = get_active_provider()
+    provider_name = provider.name
 
     # --- Boucle principale : LLM ↔ outils ---
     for _ in range(MAX_TOOL_ITERATIONS):
@@ -113,7 +97,10 @@ def handle_chat(history: list[dict]) -> dict:
         except Exception as exc:  # noqa: BLE001
             if provider.name != "demo-local":
                 errors.append(f"{provider.name}: {exc}")
-                fallback = next((p for p in chain if p.name == "demo-local"), provider)
+                # Le provider en panne est écarté du cache : le prochain message
+                # re-testera la chaîne complète (il peut être rétabli d'ici là).
+                invalidate_provider_cache()
+                fallback = next((p for p in build_chain() if p.name == "demo-local"), provider)
                 provider = fallback
                 provider_name = provider.name
                 result = provider.chat(messages, tools)
@@ -146,6 +133,10 @@ def handle_chat(history: list[dict]) -> dict:
 
         reply = result.content or "(réponse vide)"
         break
+
+    if not reply:
+        # La boucle d'outils est épuisée sans réponse finale (trop d'appels d'outils).
+        reply = "(réponse interrompue : trop d'appels d'outils enchaînés — réessaie)."
 
     # --- Pas de réflexion : l'IA analyse sa propre réponse ---
     if provider_name == "demo-local" and _demo_needs_reflection(user_text, system, reply):
