@@ -77,6 +77,7 @@ relais (les autres clés = fallback automatique).
 - **Scraper Chromium** : **`render.yaml`** — sur Render, *New → Blueprint* crée les 2
   services du projet en one-click (ou manuellement : voir `services/scraper/README.md`) →
   `SCRAPER_SERVICE_URL=https://ton-scraper.onrender.com` dans `.env`.
+  → 📘 **Tutoriel Render détaillé pas-à-pas : [docs/RENDER.md](docs/RENDER.md)**
 - **Colab** : ouvrir `colab/main.ipynb` dans Google Colab → Run all (voir `colab/README.md`).
 
 ## 🔒 Garde-fous humains (non négociables)
