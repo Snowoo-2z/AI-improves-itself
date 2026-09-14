@@ -1,0 +1,20 @@
+[
+  {
+    "id": "task-demo-1",
+    "kind": "search",
+    "target": "état de l'art des agents IA auto-améliorants 2026",
+    "reason": "Tâche de démonstration ajoutée par l'IA : vérifier où en est la recherche sur les self-improving agents.",
+    "by": "ai",
+    "status": "pending",
+    "created_at": "2026-09-14T00:00:00Z"
+  },
+  {
+    "id": "task-demo-2",
+    "kind": "fetch",
+    "target": "https://en.wikipedia.org/wiki/Autonomous_agent",
+    "reason": "Tâche de démonstration : récupérer et lire cette page pour alimenter la base de connaissances.",
+    "by": "ai",
+    "status": "pending",
+    "created_at": "2026-09-14T00:00:00Z"
+  }
+]

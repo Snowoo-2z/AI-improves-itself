@@ -1,0 +1,51 @@
+[
+  {
+    "title": "The Legend of Zelda",
+    "category": "jeux-vidéo",
+    "date": "1986-02-21",
+    "summary": "Premier Zelda (NES). Link part à la rescousse de la princesse Zelda dans le royaume d'Hyrule.",
+    "source": "seed"
+  },
+  {
+    "title": "Zelda II: The Adventure of Link",
+    "category": "jeux-vidéo",
+    "date": "1987-04-27",
+    "summary": "Suite sur NES : Link devient roi et voyage entre le présent, le passé et le futur.",
+    "source": "seed"
+  },
+  {
+    "title": "The Legend of Zelda: Ocarina of Time",
+    "category": "jeux-vidéo",
+    "date": "1998-11-21",
+    "summary": "Révolution 3D sur N64, régulièrement cité comme l'un des meilleurs jeux de tous les temps.",
+    "source": "seed"
+  },
+  {
+    "title": "The Legend of Zelda: Breath of the Wild",
+    "category": "jeux-vidéo",
+    "date": "2017-03-03",
+    "summary": "Open world sur Wii U / Nintendo Switch, une redéfinition complète de la série.",
+    "source": "seed"
+  },
+  {
+    "title": "The Legend of Zelda: Tears of the Kingdom",
+    "category": "jeux-vidéo",
+    "date": "2023-05-12",
+    "summary": "Suite de Breath of the Wild sur Switch : Hyrule Sky, outils de fusion, liberté inédite.",
+    "source": "seed"
+  },
+  {
+    "title": "Mistral AI",
+    "category": "ia",
+    "date": "2023-09-01",
+    "summary": "Lab d'IA français (Paris). Modèles Mistral Small/Medium et gamme Légère/Sonare. Offre gratuite 'La Plateforme' — fournisseur principal du projet.",
+    "source": "seed"
+  },
+  {
+    "title": "Supabase",
+    "category": "infra",
+    "date": "2024-01-01",
+    "summary": "Backend open-source (Postgres, auth, storage, real-time) avec free tier. Bientôt la base de données du projet (voir supabase/schema.sql).",
+    "source": "seed"
+  }
+]

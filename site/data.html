@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data — AI-improves-itself</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html">IA</a>
+      <a href="/prompt.html">Prompt système</a>
+      <a href="/data.html" class="active">Data</a>
+      <a href="/colab.html">/colab</a>
+      <a href="/request.html">/request</a>
+      <a href="/contributeur.html">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>Base de connaissances</h1>
+      <p class="sub">
+        La « base de données » du projet. Phase 1 : fichiers JSON locaux (<code>core/data/knowledge.json</code>).
+        Phase 2 : migration vers <b>Supabase</b> (schéma prêt dans <code>supabase/schema.sql</code>) puis repo
+        GitHub privé pour les données de recherche. Les redirections vers les datas (tâches, résultats,
+        requêtes) passent par l'API du site.
+      </p>
+      <div class="chips" id="cats"></div>
+    </section>
+    <div class="card">
+      <h2>Entrées</h2>
+      <div id="data-table"><span class="muted">Chargement…</span></div>
+    </div>
+    <div class="card">
+      <h2>Redirections vers les datas</h2>
+      <table>
+        <thead><tr><th>Ressource</th><th>Page</th><th>API</th></tr></thead>
+        <tbody>
+          <tr><td>Requêtes IA → dev</td><td><a href="/request.html">/request</a></td><td class="mono small">GET /api/requests</td></tr>
+          <tr><td>Tâches de recherche</td><td><a href="/colab.html">/colab</a></td><td class="mono small">GET /api/research/tasks</td></tr>
+          <tr><td>Résultats de recherche</td><td><a href="/colab.html">/colab</a></td><td class="mono small">GET /api/research/results</td></tr>
+          <tr><td>Prompts + historique</td><td><a href="/prompt.html">/prompt</a></td><td class="mono small">GET /api/prompt-system</td></tr>
+          <tr><td>Skills de l'IA</td><td><a href="/contributeur.html">/contributeur</a></td><td class="mono small">GET /api/skills</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="footer">Ordre d'affichage : du plus récent au plus ancien (la date compte 😉).</footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/data.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "id": "recherche",
+  "scope": "recherche",
+  "version": 1,
+  "updated_by": "seed",
+  "updated_at": 1757808000,
+  "keywords": ["cherche sur le web", "scrape", "scraping", "crawl", "colab", "recherche web", "dernières news", "actualités", "veille"],
+  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, ou kind=\"search\" + requête de recherche.\n- Explique que l'exécution est asynchrone : le service Chromium (Render) ou le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis propose (ou ajoute, si la skill le permet) une entrée dans la base de connaissances avec sa date et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
+  "history": []
+}

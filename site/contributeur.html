@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contribuer — AI-improves-itself</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html">IA</a>
+      <a href="/prompt.html">Prompt système</a>
+      <a href="/data.html">Data</a>
+      <a href="/colab.html">/colab</a>
+      <a href="/request.html">/request</a>
+      <a href="/contributeur.html" class="active">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page page-narrow">
+    <section class="hero">
+      <h1>Contribuer</h1>
+      <p class="sub">
+        Le projet est un <b>mono-repo</b> : l'interface, le cœur IA, le scraper et le notebook Colab
+        vivent ensemble. L'IA n'écrira jamais le code — elle le <em>request</em>. Le code, c'est votre territoire.
+      </p>
+    </section>
+
+    <div class="card">
+      <h2>Où apporter sa pierre</h2>
+      <table>
+        <thead><tr><th>Partie</th><th>Emplacement</th><th>Idées</th></tr></thead>
+        <tbody>
+          <tr><td><b>Site statique</b></td><td class="mono small">site/</td><td class="small muted">pages, UX, i18n, mode clair, export des données</td></tr>
+          <tr><td><b>Cœur IA</b></td><td class="mono small">core/</td><td class="small muted">nouveaux providers, meilleurs garde-fous, évaluation des auto-modifs</td></tr>
+          <tr><td><b>Prompts</b></td><td class="mono small">core/prompt_system/prompts/</td><td class="small muted">modules spécialisés (nouveaux garde-fous par mots-clés)</td></tr>
+          <tr><td><b>Scraper Chromium</b></td><td class="mono small">services/scraper/</td><td class="small muted">rendu JS avancé, extraction markdown, file d'attente, authentification Render</td></tr>
+          <tr><td><b>Colab</b></td><td class="mono small">colab/</td><td class="small muted">nouveaux types de tâches (PDF, YouTube, RSS), meilleurs summaries</td></tr>
+          <tr><td><b>Base de données</b></td><td class="mono small">supabase/schema.sql</td><td class="small muted">migration JSON → Supabase, index, politiques RLS</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Comment ça marche (cycle)</h2>
+      <pre class="block">fork → branche feature/* → PR → relecture → merge
+L'IA ne code pas : elle ouvre des requêtes sur /request (type "skill" ou "feature").
+Les auto-modifs de prompt passent par la page /prompt (versionnées, réversibles).</pre>
+    </div>
+
+    <div class="card">
+      <h2>Skills de l'IA (live, via l'API)</h2>
+      <p class="muted small">L'IA peut affiner leurs <em>descriptions</em> (auto-amélioration légère) ; de nouvelles skills = code humain via /request.</p>
+      <div id="skills-wrap"><span class="muted">Chargement…</span></div>
+    </div>
+  </main>
+
+  <footer class="footer">Les contributions sont les bienvenues — y compris « l'IA a fait une bêtise » (c'est de la recherche 😄).</footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/contrib.js"></script>
+</body>
+</html>
