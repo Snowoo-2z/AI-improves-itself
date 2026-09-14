@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>/colab — recherche web — AI-improves-itself</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html">IA</a>
+      <a href="/prompt.html">Prompt système</a>
+      <a href="/data.html">Data</a>
+      <a href="/colab.html" class="active">/colab</a>
+      <a href="/request.html">/request</a>
+      <a href="/contributeur.html">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>/colab — recherche web</h1>
+      <p class="sub">
+        Quand l'IA a besoin d'informations, elle programme des <b>tâches</b> (skill
+        <code>add_research_task</code>). Deux exécutants : le <b>notebook Colab</b>
+        (script mis à jour par l'IA via ces tâches — « j'ai besoin de vérifier X » → nouvelle tâche dans
+        <code>colab/tasks.json</code>) et le <b>service Chromium</b> déployé sur Render
+        (<code>services/scraper</code>). Les résultats reviennent ici, puis l'IA les étudie.
+      </p>
+    </section>
+
+    <div class="flow" style="margin-bottom:18px">
+      <div class="step"><div class="num">01</div><b>L'IA programme</b><div class="small muted">« Je dois vérifier X » → tâche search/fetch dans la file.</div></div>
+      <div class="step"><div class="num">02</div><b>Exécution</b><div class="small muted">Notebook Colab (<code>colab/main.ipynb</code>) ou web service Chromium (Render).</div></div>
+      <div class="step"><div class="num">03</div><b>Retour & étude</b><div class="small muted">Résultats poussés via <code>POST /api/research/results</code> → l'IA les lit (skill list_research_results).</div></div>
+    </div>
+
+    <div class="layout">
+      <section>
+        <div class="card">
+          <h2>Tâches en file</h2>
+          <div id="tasks-wrap"><span class="muted">Chargement…</span></div>
+        </div>
+        <div class="card">
+          <h2>Derniers résultats</h2>
+          <div id="results-wrap"><span class="muted">Chargement…</span></div>
+        </div>
+      </section>
+      <aside>
+        <div class="card">
+          <h3>Ajouter une tâche (manuel)</h3>
+          <form id="task-form">
+            <div class="field"><label>Kind</label>
+              <select name="kind"><option value="search">search (requête)</option><option value="fetch">fetch (URL)</option><option value="note">note (texte)</option></select>
+            </div>
+            <div class="field"><label>Target (URL ou requête)</label><input name="target" required placeholder="https://… ou « agents IA 2026 »" /></div>
+            <div class="field"><label>Pourquoi</label><textarea name="reason" placeholder="Contexte pour l'IA…"></textarea></div>
+            <button class="btn" type="submit">Ajouter à la file</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Notebook Colab</h3>
+          <div class="small muted" style="margin-bottom:10px">
+            Le script <code>colab/main.py</code> lit <code>tasks.json</code>, exécute les tâches
+            <code>pending</code>, écrit <code>results.json</code> et pousse les résultats au site.
+          </div>
+          <a class="btn ghost" href="/colab-notebook/main.ipynb" target="_blank">Ouvrir le notebook</a>
+          <div class="small muted" style="margin-top:10px">
+            Astuce Colab : <em>File → Open notebook… → Colab</em> sur le fichier du repo (ou
+            <code>!cp</code> dans un notebook vierge). Les tâches exécutées passent à <code>done</code>.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">Le scraping honore les robots.txt du site cible. Volume raisonnable : c'est de la recherche, pas du crawl massif.</footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/colab.js"></script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI-improves-itself — l'IA s'améliore d'elle-même</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚛️</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html" class="active">IA</a>
+      <a href="/prompt.html">Prompt système</a>
+      <a href="/data.html">Data</a>
+      <a href="/colab.html">/colab</a>
+      <a href="/request.html">/request</a>
+      <a href="/contributeur.html">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>L'IA s'améliore d'elle-même.</h1>
+      <p class="sub">
+        Projet de recherche : et si on donnait à une IA les outils pour modifier <b>son propre prompt système</b>,
+        affiner ses skills et programmer sa propre recherche web ? Chaque auto-modification est
+        <b>versionnée, visible et réversible</b> — un humain garde toujours le dernier mot.
+      </p>
+      <div class="chips">
+        <span class="chip" id="hero-provider">…</span>
+        <span class="chip">mono-repo · open research</span>
+        <span class="chip">offres gratuites (Mistral, Gemini, Groq, OpenRouter)</span>
+        <span class="chip">Supabase + Chromium (Render) + Colab</span>
+      </div>
+    </section>
+
+    <div class="layout">
+      <section class="card chat-card">
+        <div class="chat-head">
+          <h2>💬 Chat avec l'IA</h2>
+          <span id="chat-provider"></span>
+        </div>
+        <div id="chat-log" class="chat-log">
+          <div class="msg ai"><div class="bubble"><span class="who">IA · self-improving</span>
+            Salut 👋 Je suis l'IA du projet. Je peux <b>modifier mon propre prompt système</b> quand je détecte un défaut,
+            ouvrir des <b>requêtes au dev</b> (/request) et programmer de la <b>recherche web</b> (/colab).
+            Le meilleur essai : <b>« Quel est le dernier jeu Zelda ? »</b> — pose la question deux fois et observe.
+          </div></div>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" placeholder="Ex : Quel est le dernier jeu Zelda ?" autocomplete="off" />
+          <button type="submit">Envoyer</button>
+        </form>
+        <div class="hints">
+          <button class="hint-btn" data-q="Quel est le dernier jeu Zelda ?">🎮 dernier Zelda (démo de l'auto-corr.)</button>
+          <button class="hint-btn" data-q="Quelles sont tes compétences ?">🧰 tes compétences</button>
+          <button class="hint-btn" data-q="Cherche sur le web l'état de l'art des agents auto-améliorants">🔎 tâche de recherche</button>
+          <button class="hint-btn" data-q="Propose au dev une page de statistiques de mes auto-modifications">📮 requête au dev</button>
+        </div>
+      </section>
+
+      <aside>
+        <div class="card">
+          <h3>Prompt système</h3>
+          <div id="prompt-status" class="muted small">chargement…</div>
+        </div>
+        <div class="card">
+          <h3>Activité du projet</h3>
+          <div id="activity" class="muted small">chargement…</div>
+        </div>
+        <div class="card">
+          <h3>Comment ça marche</h3>
+          <div class="small muted">
+            1. Je réponds via ce chat.<br />
+            2. Je <b>réfléchis</b> sur ma propre réponse.<br />
+            3. Défaut détecté → j'édite mon prompt système (versionnée).<br />
+            4. Besoin d'un outil ? → requête au dev sur <a href="/request.html">/request</a>.<br />
+            5. Besoin d'infos web ? → tâche sur <a href="/colab.html">/colab</a>.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    AI-improves-itself — recherche & expérimentation. Les auto-modifications de l'IA sont auditées sur la page
+    <a href="/prompt.html">Prompt système</a>. Aucune clé API n'est stockée dans le prompt ni dans le repo.
+  </footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/chat.js"></script>
+  <script>
+    // chip héros (provider) — synchronisée avec le statut API
+    fetch((window.AIIS_CONFIG.apiBase || "") + "/api/status")
+      .then((r) => r.json())
+      .then((s) => {
+        const el = document.getElementById("hero-provider");
+        el.innerHTML = s.demo_mode
+          ? '🔬 <b>mode démo local</b> (configure .env pour le live)'
+          : `🧠 moteur : <b>${s.primary_provider}</b>`;
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt système — AI-improves-itself</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html">IA</a>
+      <a href="/prompt.html" class="active">Prompt système</a>
+      <a href="/data.html">Data</a>
+      <a href="/colab.html">/colab</a>
+      <a href="/request.html">/request</a>
+      <a href="/contributeur.html">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>Prompt système</h1>
+      <p class="sub">
+        Le cœur du projet : l'IA lit et écrit <b>ce prompt</b>. Toute modification déclenchée par l'IA
+        (scope global « main » ou modules spécialisés « code », « recherche »…) est incrémentée en version,
+        conservée dans l'historique ci-dessous, et notifiée au dev sur <a href="/request.html">/request</a>.
+        Les garde-fous par mots-clés décident quels modules sont chargés à chaque message.
+      </p>
+    </section>
+    <div id="prompts-wrap"><div class="card muted">Chargement…</div></div>
+  </main>
+
+  <footer class="footer">
+    Chaque version précédente est conservée (30 dernières) : l'auto-amélioration est <b>réversible</b> par un humain.
+  </footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/prompt.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Environments & secrets — JAMAIS de clé API dans le repo
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Données dynamiques (générées à l'exécution ; la vraie base vivra sur Supabase)
+core/data/dev_requests.json
+core/data/research_tasks.json
+core/data/research_results.json
+colab/results.json
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/
+*.log
+node_modules/

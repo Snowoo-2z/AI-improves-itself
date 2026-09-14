@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>/request — requêtes au dev — AI-improves-itself</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
+    <nav>
+      <a href="/index.html">IA</a>
+      <a href="/prompt.html">Prompt système</a>
+      <a href="/data.html">Data</a>
+      <a href="/colab.html">/colab</a>
+      <a href="/request.html" class="active">/request</a>
+      <a href="/contributeur.html">Contribuer</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="status-chip" class="chip">chargement…</span>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>/request — requêtes au développeur</h1>
+      <p class="sub">
+        L'IA n'écrit pas de code : quand une nouvelle skill, une évolution UI ou une fonctionnalité
+        lui serait utile, elle ouvre une requête ici (marquée <span class="badge ai">🤖 IA</span>).
+        Les humains peuvent aussi proposer. Le dev lit, décide, implémente — ou rejette, avec raison.
+      </p>
+    </section>
+
+    <div class="layout">
+      <section>
+        <div class="card">
+          <h2>File des requêtes</h2>
+          <div id="requests-wrap"><span class="muted">Chargement…</span></div>
+        </div>
+      </section>
+      <aside>
+        <div class="card">
+          <h3>Nouvelle requête</h3>
+          <form id="request-form">
+            <div class="field"><label>De la part de</label>
+              <select name="from_role"><option value="human">humain (moi)</option><option value="ai">IA (simulation)</option></select>
+            </div>
+            <div class="field"><label>Type</label>
+              <select name="type">
+                <option value="feature">feature</option>
+                <option value="ui">ui</option>
+                <option value="bug">bug</option>
+                <option value="skill">skill</option>
+                <option value="other">other</option>
+              </select>
+            </div>
+            <div class="field"><label>Titre</label><input name="title" required placeholder="Ex : exporter l'historique des prompts en CSV" /></div>
+            <div class="field"><label>Description</label><textarea name="description" placeholder="Contexte, comportement attendu, exemples…"></textarea></div>
+            <button class="btn" type="submit">Envoyer au dev</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Règle d'or</h3>
+          <div class="small muted">
+            L'IA propose, l'humain dispose. Toute requête <span class="badge ai">🤖 IA</span> est
+            re-lue par un humain avant implémentation — c'est le garde-fou humain du projet.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">C'est aussi ici que les auto-modifications de prompt laissent une trace (<span class="badge info">prompt_update</span>).</footer>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/requests.js"></script>
+</body>
+</html>
