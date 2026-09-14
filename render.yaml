@@ -1,0 +1,63 @@
+# ============================================================
+# AI-improves-itself — Render Blueprint
+# https://render.com/docs/blueprint-spec
+#
+# Connecter ce repo sur Render (« New → Blueprint ») crée les
+# 2 services automatiquement :
+#   1. aiis-core    → site statique + API (racine du repo)
+#   2. aiis-scraper → scraping Chromium (services/scraper)
+#
+# ⚠️ Budget : Render a supprimé le plan gratuit pour les web
+#    services. 2 × standard-512 ≈ 10-14 $/mois.
+#    Alternative 100 % gratuite : Oracle Cloud Free Tier (VM ARM
+#    toujours gratuite) pour héberger les deux briques —
+#    voir docs/ARCHITECTURE.md § 9.
+# ============================================================
+
+services:
+  # ---------- Site + API (cœur du projet) ----------
+  - type: web
+    name: aiis-core
+    runtime: python
+    plan: standard-512
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn core.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/status
+    autoDeploy: true
+    envVars:
+      # --- Fournisseurs IA (au minimum MISTRAL_API_KEY ; les autres = fallback) ---
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # --- Supabase (phase 2 ; tant que vides → JSON local) ---
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # --- À remplir APRÈS déploiement de aiis-scraper : son URL publique ---
+      - key: SCRAPER_SERVICE_URL
+        sync: false
+      # --- URL publique de CE service (utilisée par le notebook Colab pour renvoyer les résultats) ---
+      - key: MAIN_SITE_URL
+        sync: false
+
+  # ---------- Scraper Chromium (Playwright headless) ----------
+  # Le Dockerfile de services/scraper est détecté automatiquement
+  # (Playwright + Chromium + dépendances système inclus dans l'image).
+  - type: web
+    name: aiis-scraper
+    plan: standard-512
+    rootDir: services/scraper
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Optionnel : whitelist de domaines (ex. "wikipedia.org,wikimedia.org").
+      # Vide = tous les domaines autorisés.
+      - key: ALLOWED_DOMAINS
+        value: ""
