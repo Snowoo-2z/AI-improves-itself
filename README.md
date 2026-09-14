@@ -7,7 +7,7 @@
 
 Projet à but **recherche** : offres API gratuites (Mistral en priorité, + Gemini/Groq/OpenRouter en
 fallback), hébergement gratuit (site statique + Supabase free tier + Colab gratuit), un service
-Chromium léger (Render/Oracle/Fly) pour le scraping.
+Chromium léger (Render `free` 512 Mo ou Oracle Cloud) pour le scraping.
 
 ---
 
@@ -32,7 +32,7 @@ AI-improves-itself/
 │   ├── research/             #   pipeline recherche (tâches, résultats, client Chromium)
 │   └── data/                 #   base locale (JSON) → Supabase en phase 2
 │
-├── services/scraper/         # web service Chromium (Playwright) — déployable sur Render (2 Go)
+├── services/scraper/         # web service Chromium (Playwright) — Render `free` 512 Mo (2 Go = 25 $/mois)
 ├── colab/                    # notebook + script exécuté dans Google Colab (tâches de recherche)
 ├── supabase/schema.sql       # base de données (phase 2, schéma complet prêt)
 ├── render.yaml               # blueprint Render : 2 services créés en one-click
@@ -75,7 +75,9 @@ relais (les autres clés = fallback automatique).
 - **Supabase** : créer un projet → SQL Editor → exécuter `supabase/schema.sql` → renseigner
   `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` dans `.env` (la persistance bascule automatiquement).
 - **Scraper Chromium** : **`render.yaml`** — sur Render, *New → Blueprint* crée les 2
-  services du projet en one-click (ou manuellement : voir `services/scraper/README.md`) →
+  services du projet en one-click, **tous les deux sur le plan `free` (512 Mo, 0 $)** :
+  c'est la seule machine gratuite de Render, tout ce qui est ≥ 2 Go est payant
+  (`1c-2g` = 25 $/mois par service). Voir manuellement : `services/scraper/README.md` →
   `SCRAPER_SERVICE_URL=https://ton-scraper.onrender.com` dans `.env`.
   → 📘 **Tutoriel Render détaillé pas-à-pas : [docs/RENDER.md](docs/RENDER.md)**
 - **Colab** : ouvrir `colab/main.ipynb` dans Google Colab → Run all (voir `colab/README.md`).
