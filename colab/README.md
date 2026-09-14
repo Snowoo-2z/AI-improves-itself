@@ -38,5 +38,5 @@ IA (chat)  ──skill add_research_task──▶  tasks.json  (file de tâches)
 ## Limites (et pourquoi Render existe aussi)
 
 - Colab : pas de Chromium fiable (rendu JS incomplet) → idéal pour `search` et `fetch` de pages simples (Wikipédia, blogs…).
-- Pour les pages à rendu JS lourd : le service Chromium de `services/scraper` (web service, 512 Mo).
+- Pour les pages à rendu JS lourd : le service Chromium de `services/scraper` (web service, 2 Go).
 - Les deux exécutants se complètent ; les tâches restent les mêmes.

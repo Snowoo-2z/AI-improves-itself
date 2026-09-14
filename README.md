@@ -32,7 +32,7 @@ AI-improves-itself/
 │   ├── research/             #   pipeline recherche (tâches, résultats, client Chromium)
 │   └── data/                 #   base locale (JSON) → Supabase en phase 2
 │
-├── services/scraper/         # web service Chromium (Playwright) — déployable sur Render (512 Mo)
+├── services/scraper/         # web service Chromium (Playwright) — déployable sur Render (2 Go)
 ├── colab/                    # notebook + script exécuté dans Google Colab (tâches de recherche)
 ├── supabase/schema.sql       # base de données (phase 2, schéma complet prêt)
 ├── render.yaml               # blueprint Render : 2 services créés en one-click

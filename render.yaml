@@ -7,11 +7,22 @@
 #   1. aiis-core    → site statique + API (racine du repo)
 #   2. aiis-scraper → scraping Chromium (services/scraper)
 #
-# ⚠️ Budget : Render a supprimé le plan gratuit pour les web
-#    services. 2 × standard-512 ≈ 10-14 $/mois.
+# ⚠️ Plans : « compute flexibles » de Render (1c-2g = 1 vCPU / 2 Go RAM).
+#    2 Go pour le scraper : Chromium a besoin de marge (le minimum
+#    512 Mo du cahier des charges est largement couvert).
+#    Si OOM sur une page lourde : passer le scraper en 2c-4g.
+#    Coût ≈ 8-12 $/mois par service.
 #    Alternative 100 % gratuite : Oracle Cloud Free Tier (VM ARM
 #    toujours gratuite) pour héberger les deux briques —
 #    voir docs/ARCHITECTURE.md § 9.
+#
+# ⚠️ Specs (vraies erreurs rencontrées, à ne pas reintroduire) :
+#    - plan : noms valides = free / starter / standard / pro /
+#      « pro plus » … ou compute flexibles (0.5c-1g, 1c-2g, 2c-4g…).
+#      « standard-512 » n'est PAS un nom valide.
+#    - runtime : requis pour tout service (node / python / docker /
+#      image / static). Un service Dockerfile DOIT déclarer
+#      runtime: docker (pas d'auto-détection dans les Blueprints).
 # ============================================================
 
 services:
@@ -19,7 +30,7 @@ services:
   - type: web
     name: aiis-core
     runtime: python
-    plan: standard-512
+    plan: 1c-2g
     rootDir: .
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn core.server:app --host 0.0.0.0 --port $PORT
@@ -48,11 +59,12 @@ services:
         sync: false
 
   # ---------- Scraper Chromium (Playwright headless) ----------
-  # Le Dockerfile de services/scraper est détecté automatiquement
-  # (Playwright + Chromium + dépendances système inclus dans l'image).
+  # runtime: docker → Render build l'image depuis le Dockerfile de
+  # services/scraper (Playwright + Chromium + dépendances système inclus).
   - type: web
     name: aiis-scraper
-    plan: standard-512
+    runtime: docker
+    plan: 1c-2g
     rootDir: services/scraper
     healthCheckPath: /health
     autoDeploy: true

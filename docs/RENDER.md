@@ -9,7 +9,7 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 ```
 
 > ⏱ Durée estimée : **30-45 minutes** (le build Docker du scraper prend 5-10 min).
-> 💰 Coût : 2 × `standard-512` ≈ 10-14 $/mois (détail + alternative gratuite en §9).
+> 💰 Coût : 2 × `1c-2g` (1 vCPU / 2 Go) ≈ 16-24 $/mois (détail + alternative gratuite en §9).
 
 ---
 
@@ -197,7 +197,7 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 
 | Solution | Coût | Notes |
 |---|---|---|
-| **Render × 2** (ce tuto) | ~10-14 $/mois | le plus simple ; le scraper peut tourner au mode « stop » la nuit pour économiser |
+| **Render × 2** (ce tuto) | ~16-24 $/mois | le plus simple ; le scraper peut tourner au mode « stop » la nuit pour économiser |
 | **Oracle Cloud Free Tier** | **0 $** | VM ARM (4 OCPU / 24 Go) *toujours* gratuite → `aiis-core` + Chromium sur la même VM ; `SCRAPER_SERVICE_URL` = ta VM ; tu peux même ajouter le site sur le port 80 avec Caddy/nginx (reverse proxy) |
 | **Fly.io** (scraper) + Render (core) | ~0-7 $/mois | Fly a un plan gratuit small ; Chromium y fonctionne |
 | **GitHub Pages** (site seul) + Render (API) | ~5-7 $/mois | le site statique est gratuit sur Pages ; mais il faut définir `API_BASE` dans `site/js/config.js` vers l'API (aujourd'hui le site et l'API sont censés être sur la même origine) |
@@ -212,7 +212,7 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 | Réponses très lentes au 1er message | Instance froide de Render (~30-60 s au réveil) | Normal ; 2ᵉ requête rapide |
 | `aiis-core` 502 après déploiement | Crashe au boot | *Logs* : souvent `ModuleNotFoundError` → vérifier que le commit a bien `requirements.txt` ; ou mémoire insuffisante → plan plus haut |
 | Build du scraper échoue | Étape `playwright install chromium` | Relire *Logs* ; relancer le déploiement (souvent transitoire) ; vérifier que le Dockerfile est bien dans `services/scraper/` |
-| Scraper 502 / OOM (code 137) | Chromium dépasse 512 Mo sur une page lourde | Réduire `max_chars`/`wait_ms` côté appel ; plan `standard-2xl` (2 Go) pour le scraper ; `ALLOWED_DOMAINS` pour limiter |
+| Scraper 502 / OOM (code 137) | Chromium dépasse les 2 Go sur une page lourde | Réduire `max_chars`/`wait_ms` côté appel ; plan `2c-4g` (4 Go) pour le scraper ; `ALLOWED_DOMAINS` pour limiter |
 | `POST /api/research/scrape` renvoie « SCRAPER_SERVICE_URL non configuré » | Variable vide dans `aiis-core` | §4 |
 | Colab n'arrive pas à pousser les résultats | `MAIN_SITE_URL` vide ou http (Colab exige https pour certains domaines) | Mettre l'URL `https://…onrender.com` dans la cellule de config du notebook |
 | Render ne voit pas le repo | Repo privé non autorisé | Reconnecter GitHub dans Render en cochant *Private repositories* |

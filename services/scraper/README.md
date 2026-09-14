@@ -20,8 +20,8 @@ automatiquement. Il ne reste qu'à renseigner les env vars proposées à la cré
 3. **Build & Run** : détection automatique via le `Dockerfile`
    (ou manuellement : Build `pip install -r requirements.txt && playwright install --with-deps chromium`,
    Start `uvicorn main:app --host 0.0.0.0 --port $PORT`).
-4. **Plan** : instance **Basic (512 Mo RAM)** — le minimum pour Chromium.
-   > Note budget : Render a supprimé le plan web gratuit ; 512 Mo ≈ 5-7 $/mois.
+4. **Plan** : `1c-2g` (1 vCPU / 2 Go RAM) — Chromium a besoin de marge.
+   > Note budget : Render a supprimé le plan web gratuit ; 1c-2g ≈ 8-12 $/mois.
    > Alternatives 100 % gratuites : **Oracle Cloud Free Tier** (VM ARM, Chromium tourne très bien)
    > ou **Fly.io** (plan gratuit, machine de 256-512 Mo).
 5. **Env vars** :
