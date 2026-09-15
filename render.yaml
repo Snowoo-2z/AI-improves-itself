@@ -23,6 +23,12 @@
 #    après 15 min sans requête entrante (~1 min au réveil), le filesystem est
 #    éphémère, pas de disque persistant, pas de SSH, 750 h d'instance gratuites
 #    par workspace et par mois.
+#    ⚠️ Filesystem éphémère = les JSON locaux sont EFFACÉS à chaque
+#    redéploiement/redémarrage → sur Render, brancher le backend GitHub
+#    (GITHUB_TOKEN + GITHUB_REPO ci-dessous, voir docs/GITHUB-BACKEND.md) pour
+#    que requests / tâches / résultats / knowledge survivent. Les prompts
+#    auto-modifiés restent eux éphémères (reset à la version git à chaque
+#    redéploiement — garde-fou acceptable : l'humain garde le contrôle).
 #    Si Chromium OOM (code 137) sur une page lourde : d'abord réduire
 #    `max_chars`/`wait_ms` côté appel ; en dernier recours passer le scraper en
 #    `1c-2g` (25 $/mois) ou utiliser Oracle Cloud Free Tier (VM ARM toujours
@@ -55,7 +61,9 @@ services:
     rootDir: .
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn core.server:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/status
+    # /health (et PAS /api/status) : sonde légère sans accès réseau/store, pour
+    # que le health-check ne dépende jamais de GitHub/Supabase/des providers IA.
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       # --- Fournisseurs IA (au minimum MISTRAL_API_KEY ; les autres = fallback) ---
@@ -67,7 +75,18 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
-      # --- Supabase (phase 2 ; tant que vides → JSON local) ---
+      # --- Base de données : backend GitHub (repo privé) — RECOMMANDÉ sur Render ---
+      # Sans backend distant, les JSON locaux meurent à chaque redéploiement
+      # (filesystem éphémère du plan free). Avec ces 3 vars, tout survit :
+      # guide pas-à-pas dans docs/GITHUB-BACKEND.md (token fine-grained =
+      # Contents lecture+écriture sur le seul repo de données).
+      - key: STORE_BACKEND
+        value: auto
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        sync: false
+      # --- Supabase (alternative au backend GitHub ; tant que vides → voir STORE_BACKEND) ---
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY

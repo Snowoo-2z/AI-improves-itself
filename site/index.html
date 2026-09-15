@@ -4,107 +4,124 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI-improves-itself — l'IA s'améliore d'elle-même</title>
-  <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚛️</text></svg>" />
+  <link rel="stylesheet" href="/css/styles.css?v=3" />
+  <link rel="stylesheet" href="/css/chat.css?v=3" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230a0e12'/%3E%3Cg fill='none' stroke='%235eead4' stroke-width='1.6'%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8'/%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8' transform='rotate(60 12 12)'/%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8' transform='rotate(120 12 12)'/%3E%3C/g%3E%3Ccircle cx='12' cy='12' r='1.6' fill='%235eead4'/%3E%3C/svg%3E" />
 </head>
-<body>
-  <header class="topbar">
-    <a class="logo" href="/index.html">⚛ AI<span>·</span>improves<span>·</span>itself</a>
-    <nav>
-      <a href="/index.html" class="active">IA</a>
-      <a href="/prompt.html">Prompt système</a>
-      <a href="/data.html">Data</a>
-      <a href="/colab.html">/colab</a>
-      <a href="/request.html">/request</a>
-      <a href="/contributeur.html">Contribuer</a>
-    </nav>
-    <span class="spacer"></span>
-    <span id="status-chip" class="chip">chargement…</span>
-  </header>
+<body class="app">
+  <!-- Sprite d'icônes SVG (style Lucide, 100 % local) — usage :
+       <svg class="ic"><use href="#i-search" /></svg> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-atom" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="12" rx="9.5" ry="4" />
+        <ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(60 12 12)" />
+        <ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(120 12 12)" />
+        <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="M12 5v14" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6" /><path d="M12 19h8" /></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" /></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></symbol>
+      <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+      <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></symbol>
+      <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 11h4" /><path d="M8 9v4" /><path d="M15 12h.01" /><path d="M18 10h.01" /><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258A4 4 0 0 0 17.32 5z" /></symbol>
+    </defs>
+  </svg>
 
-  <main class="page">
-    <section class="hero">
-      <h1>L'IA s'améliore d'elle-même.</h1>
-      <p class="sub">
-        Projet de recherche : et si on donnait à une IA les outils pour modifier <b>son propre prompt système</b>,
-        affiner ses skills et programmer sa propre recherche web ? Chaque auto-modification est
-        <b>versionnée, visible et réversible</b> — un humain garde toujours le dernier mot.
-      </p>
-      <div class="chips">
-        <span class="chip" id="hero-provider">…</span>
-        <span class="chip">mono-repo · open research</span>
-        <span class="chip">offres gratuites (Mistral, Gemini, Groq, OpenRouter)</span>
-        <span class="chip">Supabase + Chromium (Render) + Colab</span>
+  <div id="overlay" class="overlay"></div>
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside id="sidebar" class="sidebar">
+    <div class="side-top">
+      <a class="logo" href="/index.html"><svg class="ic"><use href="#i-atom" /></svg> AI<span>·</span>improves<span>·</span>itself</a>
+      <button id="new-chat" class="new-chat" type="button"><svg class="ic"><use href="#i-plus" /></svg>Nouveau chat</button>
+      <div class="search-wrap">
+        <svg class="ic"><use href="#i-search" /></svg>
+        <input id="convo-search" class="convo-search" placeholder="Rechercher…" autocomplete="off" />
       </div>
-    </section>
+    </div>
+    <div id="convo-list" class="convo-list"></div>
+    <div class="side-bottom">
+      <div id="side-status" class="side-status"><span class="chip">chargement…</span></div>
+      <nav class="side-nav">
+        <a href="/prompt.html"><svg class="ic"><use href="#i-terminal" /></svg>Prompt système</a>
+        <a href="/data.html"><svg class="ic"><use href="#i-database" /></svg>Data</a>
+        <a href="/colab.html"><svg class="ic"><use href="#i-search" /></svg>Colab</a>
+        <a href="/request.html"><svg class="ic"><use href="#i-inbox" /></svg>Request</a>
+        <a href="/contributeur.html"><svg class="ic"><use href="#i-users" /></svg>Contribuer</a>
+      </nav>
+    </div>
+  </aside>
 
-    <div class="layout">
-      <section class="card chat-card">
-        <div class="chat-head">
-          <h2>💬 Chat avec l'IA</h2>
-          <span id="chat-provider"></span>
-        </div>
-        <div id="chat-log" class="chat-log">
-          <div class="msg ai"><div class="bubble"><span class="who">IA · self-improving</span>
-            Salut 👋 Je suis l'IA du projet. Je peux <b>modifier mon propre prompt système</b> quand je détecte un défaut,
-            ouvrir des <b>requêtes au dev</b> (/request) et programmer de la <b>recherche web</b> (/colab).
-            Le meilleur essai : <b>« Quel est le dernier jeu Zelda ? »</b> — pose la question deux fois et observe.
-          </div></div>
-        </div>
-        <form id="chat-form" class="chat-form">
-          <input id="chat-input" placeholder="Ex : Quel est le dernier jeu Zelda ?" autocomplete="off" />
-          <button type="submit">Envoyer</button>
-        </form>
-        <div class="hints">
-          <button class="hint-btn" data-q="Quel est le dernier jeu Zelda ?">🎮 dernier Zelda (démo de l'auto-corr.)</button>
-          <button class="hint-btn" data-q="Quelles sont tes compétences ?">🧰 tes compétences</button>
-          <button class="hint-btn" data-q="Cherche sur le web l'état de l'art des agents auto-améliorants">🔎 tâche de recherche</button>
-          <button class="hint-btn" data-q="Propose au dev une page de statistiques de mes auto-modifications">📮 requête au dev</button>
-        </div>
-      </section>
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="chat-topbar">
+      <button id="menu-btn" class="icon-btn" type="button" aria-label="Replier / déplier la barre latérale" title="Replier / déplier la barre latérale"><svg class="ic ic-lg"><use href="#i-menu" /></svg></button>
+      <span id="model-name" class="model-name">self-improving IA</span>
+      <span class="spacer"></span>
+      <span id="status-chip"><span class="chip">chargement…</span></span>
+    </header>
 
-      <aside>
-        <div class="card">
-          <h3>Prompt système</h3>
-          <div id="prompt-status" class="muted small">chargement…</div>
-        </div>
-        <div class="card">
-          <h3>Activité du projet</h3>
-          <div id="activity" class="muted small">chargement…</div>
-        </div>
-        <div class="card">
-          <h3>Comment ça marche</h3>
-          <div class="small muted">
-            1. Je réponds via ce chat.<br />
-            2. Je <b>réfléchis</b> sur ma propre réponse.<br />
-            3. Défaut détecté → j'édite mon prompt système (versionnée).<br />
-            4. Besoin d'un outil ? → requête au dev sur <a href="/request.html">/request</a>.<br />
-            5. Besoin d'infos web ? → tâche sur <a href="/colab.html">/colab</a>.
+    <div id="chat-scroll" class="chat-scroll">
+      <div id="chat-log" class="chat-log"></div>
+
+      <!-- Écran d'accueil (visible quand la conversation est vide) -->
+      <div id="welcome" class="welcome">
+        <div class="welcome-inner">
+          <div class="welcome-avatar"><svg class="ic"><use href="#i-atom" /></svg></div>
+          <h1>L'IA s'améliore d'elle-même.</h1>
+          <p class="welcome-sub">
+            Je peux <b>modifier mon propre prompt système</b> quand je détecte un défaut,
+            ouvrir des <b>requêtes au dev</b> et programmer de la <b>recherche web</b>.
+            Chaque auto-modification est <b>versionnée et réversible</b>.
+          </p>
+          <div class="sugg-grid">
+            <button class="sugg-card" data-q="Quel est le dernier jeu Zelda ?">
+              <span class="sugg-ico"><svg class="ic"><use href="#i-gamepad" /></svg></span>
+              <span class="sugg-t">Dernier Zelda</span>
+              <span class="sugg-d">Pose la question 2 fois, observe l'auto-correction</span>
+            </button>
+            <button class="sugg-card" data-q="Quelles sont tes compétences ?">
+              <span class="sugg-ico"><svg class="ic"><use href="#i-wrench" /></svg></span>
+              <span class="sugg-t">Tes compétences</span>
+              <span class="sugg-d">Liste des skills que je peux utiliser</span>
+            </button>
+            <button class="sugg-card" data-q="Cherche sur le web l'état de l'art des agents auto-améliorants">
+              <span class="sugg-ico"><svg class="ic"><use href="#i-search" /></svg></span>
+              <span class="sugg-t">Recherche web</span>
+              <span class="sugg-d">Je programme une tâche de recherche web</span>
+            </button>
+            <button class="sugg-card" data-q="Propose au dev une page de statistiques de mes auto-modifications">
+              <span class="sugg-ico"><svg class="ic"><use href="#i-inbox" /></svg></span>
+              <span class="sugg-t">Requête au dev</span>
+              <span class="sugg-d">J'ouvre une demande au développeur</span>
+            </button>
           </div>
         </div>
-      </aside>
+      </div>
+    </div>
+
+    <div class="composer-zone">
+      <form id="chat-form" class="composer">
+        <textarea id="chat-input" rows="1" placeholder="Écris ton message… (Entrée = envoyer)" autocomplete="off"></textarea>
+        <button id="send-btn" type="submit" aria-label="Envoyer"><svg class="ic"><use href="#i-arrow-up" /></svg></button>
+      </form>
+      <div class="disclaimer">L'IA peut se tromper — ses auto-modifications sont auditées sur <a href="/prompt.html">/prompt</a>.</div>
     </div>
   </main>
 
-  <footer class="footer">
-    AI-improves-itself — recherche & expérimentation. Les auto-modifications de l'IA sont auditées sur la page
-    <a href="/prompt.html">Prompt système</a>. Aucune clé API n'est stockée dans le prompt ni dans le repo.
-  </footer>
-
-  <script src="/js/config.js"></script>
-  <script src="/js/ui.js"></script>
-  <script src="/js/chat.js"></script>
-  <script>
-    // chip héros (provider) — synchronisée avec le statut API
-    fetch((window.AIIS_CONFIG.apiBase || "") + "/api/status")
-      .then((r) => r.json())
-      .then((s) => {
-        const el = document.getElementById("hero-provider");
-        el.innerHTML = s.demo_mode
-          ? '🔬 <b>mode démo local</b> (configure .env pour le live)'
-          : `🧠 moteur : <b>${s.primary_provider}</b>`;
-      })
-      .catch(() => {});
-  </script>
+  <script src="/js/config.js?v=3"></script>
+  <script src="/js/ui.js?v=3"></script>
+  <script src="/js/markdown.js?v=3"></script>
+  <script src="/js/chat.js?v=3"></script>
 </body>
 </html>

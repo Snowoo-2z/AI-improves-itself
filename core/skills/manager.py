@@ -130,10 +130,12 @@ def _norm(text: str) -> str:
 
 
 def _load_knowledge() -> list[dict]:
+    # Passe par le Store actif : en mode local c'est le même fichier qu'avant
+    # (core/data/knowledge.json), en mode github/supabase ça vient du backend.
     try:
-        with open(KNOWLEDGE_PATH, "r", encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
+        items = store_module.get_store().list("knowledge", default=[])
+        return items if isinstance(items, list) else []
+    except Exception:
         return []
 
 

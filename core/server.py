@@ -72,6 +72,12 @@ class ResearchResult(BaseModel):
     task_id: str | None = None
 
 
+@app.get("/health")
+def health() -> dict:
+    """Sonde légère pour Render (aucun accès store/réseau : 200 tant que le process vit)."""
+    return {"ok": True}
+
+
 @app.get("/api/status")
 def status() -> dict:
     s = store_module.get_store()
@@ -81,6 +87,8 @@ def status() -> dict:
     health = providers.health_report()
     provider_name = providers.primary_provider_name()
     return {
+        "store_backend": getattr(s, "backend", "local"),
+        "store_repo": getattr(s, "repo", "") or "",
         "primary_provider": provider_name,
         "model": health["limits"].get(provider_name, {}).get("model", ""),
         "demo_mode": provider_name == "demo-local",
@@ -200,6 +208,17 @@ def research_task_add(req: ResearchTask) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"ok": True, "id": item.get("id")}
+
+
+@app.patch("/api/research/tasks/{task_id}")
+def research_task_mark(task_id: str, payload: dict) -> dict:
+    """Mettre à jour le statut d'une tâche (utilisé par le script Colab)."""
+    status = str(payload.get("status", "")).strip()
+    if status not in ("pending", "processing", "done", "failed"):
+        raise HTTPException(400, "status doit être pending|processing|done|failed")
+    if research.mark_task(task_id, status) is None:
+        raise HTTPException(404, "tâche introuvable")
+    return {"ok": True, "id": task_id, "status": status}
 
 
 @app.get("/api/research/results")
