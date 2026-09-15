@@ -27,7 +27,8 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 | Compte Render | [render.com](https://render.com) → *Sign up with GitHub* → workspace **Hobby** | 0 $ (plan `free` : 512 Mo) |
 | Clé API **Mistral** (moteur principal) | [console.mistral.ai/cle](https://console.mistral.ai/cle) → plan gratuit « La Plateforme » | 0 $ |
 | (optionnel) Clé Gemini / Groq / OpenRouter | fallbacks automatiques | 0 $ |
-| (optionnel) Compte Supabase (base de données, phase 2) | [supabase.com](https://supabase.com) | 0 $ (free tier) |
+| (**recommandé**) Repo GitHub **privé** + token (base de données, §6) | [github.com/new](https://github.com/new) + [tokens](https://github.com/settings/personal-access-tokens) → Contents : Read and write sur ce seul repo | 0 $ |
+| (optionnel) Compte Supabase (base de données alternative, §6) | [supabase.com](https://supabase.com) | 0 $ (free tier) |
 
 > **Important — repo privé ?** Le repo `AI-improves-itself` est actuellement privé.
 > Quand tu connectes Render à GitHub, la pop-up d'autorisation doit autoriser Render à
@@ -65,10 +66,13 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 | `GEMINI_API_KEY` | clé Google AI Studio | non (fallback) |
 | `GROQ_API_KEY` | clé Groq | non (fallback) |
 | `OPENROUTER_API_KEY` | clé OpenRouter | non (fallback) |
-| `SUPABASE_URL` | `https://xxxx.supabase.co` (phase 2) | non (JSON local en attendant) |
+| `STORE_BACKEND` | `auto` (défaut — déjà dans le Blueprint) | non (forcer : `local` / `github` / `supabase`) |
+| `GITHUB_TOKEN` | token fine-grained → Contents Read+write sur le repo de données **uniquement** | **oui si backend GitHub** (§6) |
+| `GITHUB_REPO` | `TON-COMPTE/ton-repo-data-prive` | **oui si backend GitHub** (§6) |
+| `SUPABASE_URL` | `https://xxxx.supabase.co` (alternative au backend GitHub) | non |
 | `SUPABASE_SERVICE_KEY` | `sb_…` (page projet → API keys → service_role) | non |
 | `SCRAPER_SERVICE_URL` | URL publique de `aiis-scraper` → **remplir au §5** | non (le scraping en sera juste désactivé) |
-| `MAIN_SITE_URL` | URL publique de `aiis-core` lui-même (visible après déploiement) | non (utilisée par le notebook Colab pour renvoyer les résultats) |
+| `MAIN_SITE_URL` | URL publique de `aiis-core` lui-même (visible après déploiement) | non (utilisée par le notebook Colab pour tirer/pousser tâches et résultats) |
 
 Où récupérer les clés :
 - **Mistral** : [console.mistral.ai](https://console.mistral.ai) → *La Plateforme* (gratuit) → *My Keys* → *Create a new API Key*. Le modèle par défaut `mistral-small-latest` est déjà configuré ; pour changer : variable `MISTRAL_MODEL`.
@@ -76,6 +80,7 @@ Où récupérer les clés :
 - **Groq** : [console.groq.com/keys](https://console.groq.com/keys).
 - **OpenRouter** : [openrouter.ai/keys](https://openrouter.ai/keys) (réglage par défaut : `openrouter/free`, l'auto-routeur officiel qui choisit un modèle gratuit compatible avec le tool calling — la liste des `:free` tourne en permanence, ne pas coder un ID en dur).
 - **NVIDIA NIM** (5ᵉ secours optionnel) : [build.nvidia.com](https://build.nvidia.com/) → `NVIDIA_API_KEY`.
+- **GitHub (base de données)** : repo privé + token — procédure complète : [docs/GITHUB-BACKEND.md](GITHUB-BACKEND.md).
 
 > ⚠️ Les IDs de modèles gratuits meurent vite (Groq a coupé `llama-3.3-70b-versatile` le
 > 16/08/2026, Mistral a retiré Medium 3/3.1 le 31/08/2026 et la ligne Magistral le
@@ -115,7 +120,7 @@ L'ordre compte : `aiis-core` a besoin de l'URL du scraper.
 2. **Add Environment Variable** → `SCRAPER_SERVICE_URL` = `https://aiis-scraper.onrender.com`.
 3. (recommandé) `MAIN_SITE_URL` = l'URL publique de `aiis-core`
    (visible en haut du service, ex. `https://aiis-core.onrender.com`).
-   → Utilisée par le notebook Colab pour renvoyer automatiquement les résultats (§7).
+   → Utilisée par le notebook Colab pour tirer les tâches et renvoyer les résultats (§7).
 4. Render propose de **redéployer** (les changements d'env var exigent un nouveau déploiement) → *Manual Deploy*.
 
 ---
@@ -123,11 +128,12 @@ L'ordre compte : `aiis-core` a besoin de l'URL du scraper.
 ## 5. Déployer `aiis-core` et vérifier que tout marche
 
 1. Ouvre `https://aiis-core.onrender.com/` → le site s'affiche, thème sombre.
-2. En haut à droite, le chip de statut doit afficher **`MISTRAL`** (et non « MODE DÉMO »).
-   Sinon → revoir `MISTRAL_API_KEY` dans l'onglet *Environment* puis redéployer.
+2. Dans la **sidebar**, le chip de statut doit afficher **`MISTRAL`** (+ `store: …` pour
+   la base active) et non « démo locale ». Sinon → revoir `MISTRAL_API_KEY` dans
+   l'onglet *Environment* puis redéployer.
 3. Teste le chat (la boucle d'auto-amélioration) :
    - **« Quel est le dernier jeu Zelda ? »** → 1ʳᵉ réponse peut être imparfaite ;
-   - si l'IA détecte un défaut, elle s'auto-corrige (événement 🧬 dans le chat) ;
+   - si l'IA détecte un défaut, elle s'auto-corrige (carte « L'IA a modifié son prompt » dans le chat) ;
    - la 2ᵉ question doit être correcte.
 4. Vérifie les pages : `/prompt.html`, `/data.html`, `/colab.html`, `/request.html`,
    `/contributeur.html`.
@@ -142,9 +148,25 @@ L'ordre compte : `aiis-core` a besoin de l'URL du scraper.
 
 ---
 
-## 6. (Optionnel) Brancher Supabase — la base de données
+## 6. Brancher une vraie base de données (indispensable sur Render !)
 
-Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
+> ⚠️ **Pourquoi indispensable ?** Le plan `free` a un filesystem **éphémère** : sans
+> backend distant, chaque redéploiement/redémarrage **efface** les requêtes, tâches,
+> résultats et connaissances (retour aux JSON du repo git). Avec un backend, tout
+> survit. À noter : les **prompts auto-modifiés** par l'IA restent eux éphémères
+> (reset à la version git à chaque redéploiement) — garde-fou acceptable : l'humain
+> garde le contrôle, et l'historique git fait foi.
+
+### Option A — GitHub (recommandé : 0 $, aucun compte en plus)
+
+1. Suivre **[docs/GITHUB-BACKEND.md](GITHUB-BACKEND.md)** (repo privé + token fine-grained Contents Read+write).
+2. Dans `aiis-core` → *Environment* → renseigner `GITHUB_TOKEN` + `GITHUB_REPO`
+   (`STORE_BACKEND` vaut déjà `auto` via le Blueprint) → **Manual Deploy**.
+3. Vérifier : `GET /api/status` → `"store_backend": "github"` (et la sidebar affiche
+   `store: github · TON-COMPTE/ton-repo`). Ouvre une requête sur Request : un commit
+   `data: dev_requests (…)` doit apparaître dans le repo de données.
+
+### Option B — Supabase (alternative)
 
 1. [supabase.com](https://supabase.com) → *New project* (free tier).
 2. **SQL Editor** → New query → coller le contenu de **`supabase/schema.sql`** → *Run*.
@@ -155,7 +177,7 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
    - `SUPABASE_SERVICE_KEY` = `service_role` (⚠️ jamais dans le repo — env var Render uniquement)
 4. Dans `aiis-core` → *Environment* → ajouter/modifier les 2 variables → *Manual Deploy*.
 5. La persistance bascule **automatiquement** (le code détecte les 2 variables ;
-   sinon JSON local).
+   sinon backend GitHub si configuré, sinon JSON local).
 
 > 📌 La migration des données existantes (JSON → tables) et l'écriture des prompts
 > versionnés dans Supabase sont à la roadmap : aujourd'hui, en mode Supabase, les tables
@@ -170,17 +192,20 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
    (ou *Import notebook* depuis un notebook vierge).
 2. Cellule de config : `MAIN_SITE_URL = "https://aiis-core.onrender.com"`
    (= `MAIN_SITE_URL` du service `aiis-core`, §4).
-3. **Runtime → Run all** → les tâches `pending` de `colab/tasks.json` s'exécutent
-   (recherche DuckDuckGo sans clé + fetch de pages simples), les résultats sont poussés
-   vers `POST /api/research/results` du site.
+3. **Runtime → Run all** :
+   - le script **tire les tâches depuis l'API** (`GET /api/research/tasks`) et les
+     fusionne avec `tasks.json` local — c'est comme ça qu'il voit les tâches créées
+     via le chat sur Render (backend GitHub, plus de fichier local partagé) ;
+   - les tâches `pending` s'exécutent (recherche DuckDuckGo sans clé + fetch de pages simples) ;
+   - statuts (`PATCH`) et résultats (`POST /api/research/results`) sont repoussés au site.
 4. Sur le site : `/colab.html` → les tâches passent `done`, les résultats apparaissent.
    Dans le chat : **« Quelles sont les dernières recherches ? »** (skill `list_research_results`).
 
 > ⏳ Les sessions Colab sont limitées dans le temps (RAM gratuite ~12 h max) :
 > le script sauvegarde de façon incrémentale (`tasks.json`/`results.json` mis à jour
 > après chaque tâche) → rien n'est perdu en cas de coupure.
-> Les tâches ajoutées par l'IA via le chat vivent dans `colab/tasks.json` **du repo** :
-> pousse la branche avant de relancer Colab pour qu'il voie les dernières tâches.
+> Sans `MAIN_SITE_URL`, le script ne voit que le `tasks.json` local : pense à pousser
+> la branche avant de relancer Colab pour qu'il voie les dernières tâches.
 
 ---
 
@@ -231,13 +256,17 @@ l'échelle des web services est `free` (512 Mo) → `0.5c-512mb` (512 Mo, 7 $) �
 
 | Symptôme | Cause probable | Correction |
 |---|---|---|
-| Site affiche « MODE DÉMO » au lieu de MISTRAL | `MISTRAL_API_KEY` absente/vide/mal collée | *Environment* → vérifier la clé (pas d'espaces) → **Manual Deploy** |
+| Site affiche « démo locale » au lieu de MISTRAL | `MISTRAL_API_KEY` absente/vide/mal collée | *Environment* → vérifier la clé (pas d'espaces) → **Manual Deploy** |
+| `store_backend` reste `local` malgré les vars GitHub | Env vars vides/mal nommées, ou pas de redéploiement après ajout | Vérifier `GITHUB_TOKEN` + `GITHUB_REPO=owner/repo` → **Manual Deploy** (les env vars exigent un redéploiement) |
+| `/api/status` en 500, sidebar vide | Token GitHub invalide (401) ou repo/branch inexistant | *Logs* → corriger `GITHUB_TOKEN`/`GITHUB_REPO`/`GITHUB_BRANCH` → redéployer. En attendant, `STORE_BACKEND=local` rétablit le site (données éphémères) |
+| Données effacées après chaque déploiement | Pas de backend distant (filesystem éphémère du plan `free`) | §6 : brancher GitHub ou Supabase |
 | Réponses très lentes au 1er message | Plan `free` : l'instance s'est endormie (15 min sans requête) → ~1 min de réveil | Normal ; la 2ᵉ requête est rapide. Pour supprimer le réveil : plan `0.5c-512mb` (7 $) ou `1c-2g` (25 $) |
 | Site/scraper muet en fin de mois, puis retour au 1er du mois | Quota **750 h d'instance gratuites** du workspace épuisé (2 services toujours éveillés ≈ 1 460 h) | Laisser les services s'endormir (pas de trafic permanent), ne garder qu'un seul service en `free`, ou passer un service en payant |
 | `aiis-core` 502 après déploiement | Crashe au boot | *Logs* : souvent `ModuleNotFoundError` → vérifier que le commit a bien `requirements.txt` ; ou OOM en 512 Mo (plan `free`) → `1c-2g` (25 $/mois) |
 | Build du scraper échoue | Étape `playwright install chromium` | Relire *Logs* ; relancer le déploiement (souvent transitoire) ; vérifier que le Dockerfile est bien dans `services/scraper/` |
 | Scraper 502 / OOM (code 137) | Chromium dépasse les **512 Mo** du plan `free` sur une page lourde (risque assumé du scraper à 0 $) | Réduire `max_chars`/`wait_ms` côté appel ; `ALLOWED_DOMAINS` pour limiter ; si l'OOM persiste → `1c-2g` (2 Go, 25 $/mois) pour le scraper, ou Oracle Cloud Free Tier (0 $) |
 | `POST /api/research/scrape` renvoie « SCRAPER_SERVICE_URL non configuré » | Variable vide dans `aiis-core` | §4 |
+| Colab ne voit pas les tâches du chat | `MAIN_SITE_URL` vide dans le notebook (le script ne tire l'API que si elle est définie) | Renseigner `MAIN_SITE_URL` (§7) — sinon seules les tâches du `tasks.json` local sont vues |
 | Colab n'arrive pas à pousser les résultats | `MAIN_SITE_URL` vide ou http (Colab exige https pour certains domaines) | Mettre l'URL `https://…onrender.com` dans la cellule de config du notebook |
 | Render ne voit pas le repo | Repo privé non autorisé | Reconnecter GitHub dans Render en cochant *Private repositories* |
 | Push ne déclenche pas le déploiement | Le Blueprint a été créé sur une **autre branche** | *Settings → Branch* → choisir ta branche, ou merger sur la branche du Blueprint |
@@ -251,8 +280,9 @@ l'échelle des web services est `free` (512 Mo) → `0.5c-512mb` (512 Mo, 7 $) �
 - [ ] `MISTRAL_API_KEY` (+ fallbacks optionnels) renseignés
 - [ ] Scraper live → `/health` OK
 - [ ] `SCRAPER_SERVICE_URL` + `MAIN_SITE_URL` dans `aiis-core` → redéploié
-- [ ] Site live → chip **MISTRAL** (pas MODE DÉMO)
+- [ ] Site live → chip **MISTRAL** dans la sidebar (pas démo locale)
+- [ ] Backend GitHub : `GITHUB_TOKEN` + `GITHUB_REPO` → redéployé → `/api/status` dit `"store_backend": "github"`
 - [ ] Test chat « dernier Zelda » ×2
 - [ ] `/prompt.html` `/data.html` `/colab.html` `/request.html` `/contributeur.html` OK
-- [ ] (opt) Supabase : `schema.sql` exécuté + 2 variables
+- [ ] (alternative) Supabase : `schema.sql` exécuté + 2 variables
 - [ ] (opt) Colab : notebook lancé, `MAIN_SITE_URL` configurée

@@ -1,4 +1,4 @@
-/* Page /colab — tâches de recherche (Chromium / Colab) + résultats. */
+/* Page Colab — tâches de recherche (Chromium / Colab) + résultats. */
 "use strict";
 
 async function renderTasks() {

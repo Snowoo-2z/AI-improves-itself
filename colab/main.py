@@ -1,13 +1,16 @@
 """Script Colab — le « cerveau de recherche » que l'IA met à jour via ses tâches.
 
 Mécanique :
-1. L'IA ajoute des tâches dans `tasks.json` (via la skill add_research_task /
-   l'API du site) : kind = search (requête) | fetch (URL) | note (texte brut).
+1. L'IA ajoute des tâches (via la skill add_research_task / l'API du site) :
+   kind = search (requête) | fetch (URL) | note (texte brut).
 2. Vous ouvrez ce script dans Google Colab (ou le lancez en local) → `run_all()`.
-3. Chaque tâche `pending` est exécutée, marquée `done`/`failed`, et un résultat
-   est écrit dans `results.json`.
-4. Si MAIN_SITE_URL est renseignée (ou en variable d'env Colab), les nouveaux
-   résultats sont poussés vers le site : POST /api/research/results —
+   Si MAIN_SITE_URL est défini, les tâches sont AUSSI rapatriées depuis l'API
+   du site (indispensable quand le backend est distant — GitHub sur Render :
+   les tâches du chat ne sont plus dans le fichier local) puis fusionnées
+   avec `tasks.json` (par id).
+3. Chaque tâche `pending` est exécutée, marquée `done`/`failed` (localement +
+   repoussé au site), et un résultat est écrit dans `results.json`.
+4. Les nouveaux résultats sont poussés vers le site : POST /api/research/results —
    l'IA pourra ensuite les étudier (skill list_research_results).
 
 Exécution en local (hors Colab) :
@@ -106,39 +109,44 @@ def _run_note(task: dict) -> dict:
 RUNNERS = {"search": _run_search, "fetch": _run_fetch, "note": _run_note}
 
 
-# ------------------------------------------------------------ orquestration ----
-def run_all(max_tasks: int | None = None) -> list[dict]:
-    tasks = _read(TASKS_PATH, [])
-    results = _read(RESULTS_PATH, [])
-    done: list[dict] = []
-    pending = [t for t in tasks if t.get("status") in ("pending", "processing")]
-    if max_tasks:
-        pending = pending[:max_tasks]
-    for task in pending:
-        task["status"] = "processing"
-        runner = RUNNERS.get(task.get("kind"))
-        if runner is None:
-            task.update(status="failed", error=f"kind inconnu : {task.get('kind')}")
-            _write(TASKS_PATH, tasks)
-            continue
-        try:
-            data = runner(task)
-            task.update(status="done", error=None)
-            results.append({"task_id": task.get("id"), "kind": task.get("kind"), "data": data,
-                            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-            done.append(data)
-        except Exception as exc:  # noqa: BLE001
-            task.update(status="failed", error=str(exc))
-        _write(TASKS_PATH, tasks)  # sauvegarde incrementale : pas de perte en cas de coupure
-    _write(RESULTS_PATH, results)
-    _push_to_site(results, done)
-    return done
+# ------------------------------------------------------------ site (API) ----
+def _pull_from_site() -> list[dict]:
+    """Rapatrie les tâches depuis l'API (source de vérité à distance)."""
+    if not MAIN_SITE_URL:
+        return []
+    try:
+        status, body = _http_get(MAIN_SITE_URL.rstrip("/") + "/api/research/tasks", timeout=20)
+        if status != 200:
+            print(f"! tâches API inaccessibles (HTTP {status}) — fichier local seul.")
+            return []
+        items = json.loads(body).get("tasks", [])
+        return items if isinstance(items, list) else []
+    except Exception as exc:  # noqa: BLE001
+        print(f"! tâches API inaccessibles ({exc}) — fichier local seul.")
+        return []
 
 
-def _push_to_site(all_results: list[dict], new_results: list[dict]) -> None:
-    if not MAIN_SITE_URL or not new_results:
+def _push_status_to_site(task_id: str | None, status: str) -> None:
+    """Repousse le statut d'une tâche (PATCH, best-effort)."""
+    if not MAIN_SITE_URL or not task_id:
         return
-    for res in new_results:
+    try:
+        body = json.dumps({"status": status}).encode("utf-8")
+        req = urllib.request.Request(
+            MAIN_SITE_URL.rstrip("/") + f"/api/research/tasks/{task_id}",
+            data=body,
+            headers={"Content-Type": "application/json", "User-Agent": UA},
+            method="PATCH",
+        )
+        urllib.request.urlopen(req, timeout=20)
+    except Exception as exc:  # noqa: BLE001
+        print(f"! statut {status} non poussé (tâche {task_id}) : {exc}")
+
+
+def _push_to_site(new_entries: list[dict]) -> None:
+    if not MAIN_SITE_URL or not new_entries:
+        return
+    for res in new_entries:
         try:
             body = json.dumps(
                 {"kind": res.get("kind", "note"), "data": res.get("data", {}), "task_id": res.get("task_id")}
@@ -153,6 +161,44 @@ def _push_to_site(all_results: list[dict], new_results: list[dict]) -> None:
             print(f"→ résultat poussé au site (tâche {res.get('task_id')})")
         except Exception as exc:  # noqa: BLE001
             print(f"! impossible de pousser au site : {exc}")
+
+
+# ------------------------------------------------------------ orquestration ----
+def run_all(max_tasks: int | None = None) -> list[dict]:
+    tasks = _read(TASKS_PATH, [])
+    # Fusion avec les tâches distantes (par id) : sans ça, les tâches créées
+    # via le chat sur Render (backend GitHub) seraient invisibles ici.
+    for remote in _pull_from_site():
+        if remote.get("id") and not any(t.get("id") == remote["id"] for t in tasks):
+            tasks.append(remote)
+    results = _read(RESULTS_PATH, [])
+    done: list[dict] = []
+    pending = [t for t in tasks if t.get("status") in ("pending", "processing")]
+    if max_tasks:
+        pending = pending[:max_tasks]
+    for task in pending:
+        task["status"] = "processing"
+        runner = RUNNERS.get(task.get("kind"))
+        if runner is None:
+            task.update(status="failed", error=f"kind inconnu : {task.get('kind')}")
+            _push_status_to_site(task.get("id"), "failed")
+            _write(TASKS_PATH, tasks)
+            continue
+        try:
+            data = runner(task)
+            task.update(status="done", error=None)
+            entry = {"task_id": task.get("id"), "kind": task.get("kind"), "data": data,
+                     "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            results.append(entry)
+            done.append(entry)
+            _push_status_to_site(task.get("id"), "done")
+        except Exception as exc:  # noqa: BLE001
+            task.update(status="failed", error=str(exc))
+            _push_status_to_site(task.get("id"), "failed")
+        _write(TASKS_PATH, tasks)  # sauvegarde incrementale : pas de perte en cas de coupure
+    _write(RESULTS_PATH, results)
+    _push_to_site(done)
+    return done
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-/* Page /request — file de requêtes IA → dev (et humain → dev). */
+/* Page Request — file de requêtes IA → dev (et humain → dev). */
 "use strict";
 
 async function render() {

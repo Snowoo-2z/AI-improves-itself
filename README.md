@@ -87,6 +87,10 @@ relais (les autres clés = fallback automatique).
 
 - **Supabase** : créer un projet → SQL Editor → exécuter `supabase/schema.sql` → renseigner
   `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` dans `.env` (la persistance bascule automatiquement).
+- **GitHub comme base** (alternative à Supabase, sans compte supplémentaire) : repo **privé**
+  dédié + token fine-grained (Contents lecture/écriture sur ce seul repo) → `GITHUB_TOKEN` +
+  `GITHUB_REPO` dans `.env` → 📘 **[docs/GITHUB-BACKEND.md](docs/GITHUB-BACKEND.md)**.
+  Le backend actif est visible dans `/api/status` (`store_backend`) et dans la sidebar du chat.
 - **Scraper Chromium** : **`render.yaml`** — sur Render, *New → Blueprint* crée les 2
   services du projet en one-click, **tous les deux sur le plan `free` (512 Mo, 0 $)** :
   c'est la seule machine gratuite de Render, tout ce qui est ≥ 2 Go est payant
