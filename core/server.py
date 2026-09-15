@@ -10,7 +10,9 @@ Démarrage (depuis la racine du repo) :
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -21,11 +23,12 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi.responses import StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from core import store as store_module  # noqa: E402
-from core.ai.chat import handle_chat  # noqa: E402
+from core.ai.chat import handle_chat, handle_chat_stream  # noqa: E402
 from core.ai.config import env  # noqa: E402
 from core.ai import providers  # noqa: E402
 from core.prompt_system import registry  # noqa: E402
@@ -148,6 +151,73 @@ def chat(req: ChatRequest) -> dict:
     if not req.messages:
         raise HTTPException(400, "messages vide")
     return handle_chat(req.messages)
+
+
+def _sse(data: dict) -> str:
+    """Sérialise un événement Serveur-Sent Events (`data:` + JSON)."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+class TitleRequest(BaseModel):
+    messages: list[dict] = Field(..., description="Un seul message utilisateur décrivant ce qu'il faut titrer")
+
+
+@app.post("/api/title")
+def generate_title(req: TitleRequest) -> dict:
+    """Titre court généré par le modèle pour nommer une conversation.
+
+    Best-effort : un seul appel, sans outils, via la chaîne de repli habituelle.
+    Si tout échoue (démo locale / quota), on renvoie un titre vide — le front
+    garde alors le titre provisoire et l'utilisateur pourra toujours renommer.
+    """
+    from core.ai.providers import LocalDemoProvider, chat_with_failover
+
+    # Constructeur minimal : pas de garde-fous par mots-clés, pas de skills.
+    system = (
+        "Tu es un utilitaire de titrage. Réponds UNIQUEMENT par un titre court "
+        "(2 à 6 mots), sans guillemets, sans point final, sans phrase."
+    )
+    messages: list[dict] = [{"role": "system", "content": system}, *req.messages]
+
+    try:
+        outcome = chat_with_failover(messages, None)
+        result = outcome.result
+        raw = (result.content or "").strip()
+        if isinstance(outcome.provider, LocalDemoProvider):
+            raise ValueError("démo locale : pas de titrage réel")
+        title = re.sub(r"^[\"'«]+|[\"'»]+$", "", raw).strip()
+        title = re.split(r"[\n\r]", title)[0].strip(" .—-")
+        if not title or len(title) > 100:
+            raise ValueError("titre vide ou trop long")
+        return {"title": title, "provider": result.provider or outcome.provider.name, "model": getattr(result, "model", "") or ""}
+    except Exception:  # noqa: BLE001 — best-effort, jamais bloquant
+        return {"title": "", "provider": "", "model": ""}
+
+
+@app.post("/api/chat/stream")
+def chat_stream(req: ChatRequest) -> StreamingResponse:
+    """Variante streamée de /api/chat (SSE) — la réponse finale arrive jeton par jeton.
+
+    Format : un événement `token` par delta de texte UNIQUEMENT pour la réponse
+    finale, puis un événement `done` portant le contenu complet + les events
+    (tools/prompt_update) + les warnings.
+    """
+    if not req.messages:
+        raise HTTPException(400, "messages vide")
+
+    def _generator():
+        for ev in handle_chat_stream(req.messages):
+            yield _sse(ev)
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/prompt-system")

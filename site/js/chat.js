@@ -12,6 +12,7 @@ const convoListEl = document.getElementById("convo-list");
 const convoSearch = document.getElementById("convo-search");
 const sidebar = document.getElementById("sidebar");
 const overlay = document.getElementById("overlay");
+const modelNameEl = document.getElementById("model-name");
 
 /* ---------- État ---------- */
 const LS_CONVOS = "aiis.convos.v1";
@@ -23,8 +24,20 @@ let isSending = false;
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const current = () => convos.find((c) => c.id === currentId) || null;
 const apiMessages = (c) => (c ? c.messages.map((m) => ({ role: m.role, content: m.content })) : []);
-// Icônes SVG : renvoie vers le sprite <symbol> défini dans index.html.
-const icon = (name) => `<svg class="ic" aria-hidden="true"><use href="#i-${name}" /></svg>`;
+const showTitle = (c) => {
+  if (!c) return "Nouveau chat";
+  if (c.renamedByUser) return c.title || "Conversation";
+  if (!c.messages || !c.messages.length) return "Nouveau chat";
+  if (c.title) return c.title;
+  const q = c.messages.find((m) => m.role === "user");
+  return q ? q.content.trim().split("\n")[0].slice(0, 42) : "Nouveau chat";
+};
+const activeHint = (c) => {
+  if (!c || !c.messages || !c.messages.length) return "";
+  if (c.renamedByUser) return "";
+  if (c.title) return "Titre généré par l'IA";
+  return c.messages.find((m) => m.role === "user") ? "Titre provisoire — l'IA le nommera" : "";
+};
 
 function load() {
   try { convos = JSON.parse(localStorage.getItem(LS_CONVOS) || "[]"); } catch { convos = []; }
@@ -41,11 +54,10 @@ function save() {
 }
 function touch(convo) {
   convo.updatedAt = Date.now();
-  if (!convo.title) {
-    const first = convo.messages.find((m) => m.role === "user");
-    if (first) convo.title = first.content.trim().split("\n")[0].slice(0, 42) || "Sans titre";
-  }
 }
+
+// Icônes SVG : renvoie vers le sprite <symbol> défini dans index.html.
+const icon = (name) => `<svg class="ic" aria-hidden="true"><use href="#i-${name}" /></svg>`;
 
 /* ---------- Rendu : messages ---------- */
 function scrollBottom() {
@@ -170,12 +182,28 @@ function errorCard(message) {
   });
 }
 
+/* ---------- Titre affiché dans la barre du haut ---------- */
+function renderTitle() {
+  const c = current();
+  if (!c) {
+    modelNameEl.textContent = "Nouveau chat";
+    modelNameEl.classList.remove("ai-title", "provisional");
+    return;
+  }
+  const hint = activeHint(c);
+  modelNameEl.textContent = showTitle(c);
+  modelNameEl.classList.toggle("ai-title", !!hint && c.title);
+  modelNameEl.classList.toggle("provisional", !!hint && !c.title);
+  modelNameEl.title = hint || showTitle(c);
+}
+
 /* ---------- Rendu : conversation courante ---------- */
 function renderConvo() {
   chatLog.innerHTML = "";
   const c = current();
   const empty = !c || !c.messages.length;
   welcomeEl.style.display = empty ? "" : "none";
+  renderTitle();
   if (!c) return;
   c.messages.forEach((m, idx) => {
     if (m.role === "user") {
@@ -207,7 +235,7 @@ function groupOf(ts) {
 function renderConvoList() {
   const q = (convoSearch.value || "").trim().toLowerCase();
   const items = convos
-    .filter((c) => !q || (c.title || "").toLowerCase().includes(q))
+    .filter((c) => !q || (showTitle(c) || "").toLowerCase().includes(q))
     .slice()
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   convoListEl.innerHTML = "";
@@ -229,8 +257,8 @@ function renderConvoList() {
     el.className = "convo" + (c.id === currentId ? " active" : "");
     const title = document.createElement("span");
     title.className = "ctitle";
-    title.textContent = c.title || "Sans titre";
-    title.title = c.title || "";
+    title.textContent = showTitle(c);
+    title.title = showTitle(c);
     const rn = document.createElement("button");
     rn.type = "button"; rn.className = "crename"; rn.title = "Renommer";
     rn.innerHTML = icon("pencil");
@@ -252,14 +280,18 @@ function renderConvoList() {
 function startRename(convo, el, titleEl) {
   const input = document.createElement("input");
   input.className = "crename-input";
-  input.value = convo.title || "";
+  input.value = showTitle(convo);
   titleEl.replaceWith(input);
   input.focus();
   input.select();
   const commit = (ok) => {
-    if (ok && input.value.trim()) convo.title = input.value.trim().slice(0, 80);
+    if (ok && input.value.trim()) {
+      convo.title = input.value.trim().slice(0, 80);
+      convo.renamedByUser = true; // le choix humain gagne désormais sur l'IA
+    }
     save();
     renderConvoList();
+    renderTitle();
   };
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") commit(true);
@@ -318,7 +350,106 @@ async function send(text) {
   chatLog.appendChild(userMsgEl(msg));
   scrollBottom();
   renderConvoList();
+  renderTitle();
   await requestReply(c);
+}
+
+/* Assistant en cours (élément reconstruit à chaque delta). */
+function createAssistant() {
+  const wrap = document.createElement("div");
+  wrap.className = "cmsg ai";
+  wrap.innerHTML = `<div class="avatar">${icon("atom")}</div><div class="abody"><div class="bubble md ghost live-bubble"></div><div class="actions"><button type="button" class="act-btn live-copy">${icon("copy")}<span>Copier</span></button></div></div>`;
+  let text = "";
+  const bubble = wrap.querySelector(".bubble");
+  const copyBtn = wrap.querySelector(".live-copy");
+  copyBtn.addEventListener("click", async () => {
+    const label = copyBtn.querySelector("span");
+    try {
+      await navigator.clipboard.writeText(text);
+      label.textContent = "✓ Copié";
+      setTimeout(() => { label.textContent = "Copier"; }, 1500);
+    } catch { label.textContent = "Échec copie"; }
+  });
+  return {
+    el: wrap,
+    append() { if (!wrap.parentNode) chatLog.appendChild(wrap); },
+    appendToken(delta) {
+      text += delta;
+      bubble.innerHTML = md(text);
+      scrollBottom();
+    },
+    get text() { return text; },
+    remove() { wrap.remove(); },
+  };
+}
+
+/* Lit un flux SSE retourné par /api/chat/stream et alimente `events`.
+   Récupère : les deltas `token` (pour les afficher en direct), puis l'événement
+   `done` (reply complet + events + warnings + attempts). Lance `onToken` pour
+   chaque delta et `onDone` une seule fois à la fin.
+ */
+async function consumeStream(url, body, { onToken, onDone }) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`POST ${url} → ${res.status} ${detail}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let finished = false;
+  let donePayload = null;
+  while (!finished) {
+    const { value, done } = await reader.read();
+    buf += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const parts = buf.split("\n\n");
+    buf = parts.pop();
+    for (const part of parts) {
+      const lines = part.split("\n");
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        let ev;
+        try { ev = JSON.parse(payload); } catch { continue; }
+        if (ev.type === "token") onToken(ev);
+        else if (ev.type === "done") donePayload = ev;
+      }
+    }
+    if (done) finished = true;
+  }
+  onDone(donePayload);
+}
+
+/* Génère un titre via le modèle (best-effort, le premier provider cloud qui
+   répond). L'IA ne voit QUE le message utilisateur décodé, jamais les event
+   tools/prompt internes. Si le titre ne convient pas, l'utilisateur peut le
+   renommer ; son choix gagne alors définitivement (renamedByUser).
+ */
+async function generateAITitle(msgs) {
+  if (!msgs || !msgs.length) return null;
+  const q = msgs.filter((m) => m.role === "user").map((m) => m.content).join("\n");
+  try {
+    const r = await apiPost("/api/title", {
+      messages: [
+        {
+          role: "user",
+          content:
+            "Génère UN titre court (2 à 5 mots, en français si la question est en français) " +
+            "qui résume cette conversation, sans guillemets ni ponctuation finale :\n" +
+            q.slice(0, 400),
+        },
+      ],
+    });
+    const t = String(r.title || "").trim();
+    return t && t.length < 80 ? t : null;
+  } catch {
+    return null;
+  }
 }
 
 async function requestReply(convo) {
@@ -327,40 +458,80 @@ async function requestReply(convo) {
   const typing = typingEl();
   chatLog.appendChild(typing);
   scrollBottom();
+
+  let ai = createAssistant();
   try {
-    const res = await apiPost("/api/chat", { messages: apiMessages(convo) });
-    typing.remove();
-    (res.events || []).forEach((ev) => {
-      const card = eventCard(ev);
-      if (card) chatLog.appendChild(card);
-    });
-    let warn = null;
-    if (res.warnings && res.warnings.length) {
-      console.warn("warnings", res.warnings, "attempts", res.attempts || []);
-      warn = {
-        warnings: res.warnings,
-        provider: res.provider,
-        fallback_to_demo: !!res.fallback_to_demo,
-        retry_human: res.provider_retry_in_human || "",
-      };
-      chatLog.appendChild(warnCard(warn));
-    }
-    const assistantMsg = { role: "assistant", content: res.reply, events: res.events || [], warn };
-    convo.messages.push(assistantMsg);
-    touch(convo);
-    save();
-    // Re-rend juste pour placer le bouton Régénérer sur le dernier message.
-    renderConvo();
-    renderConvoList();
-    refreshStatus();
+    await consumeStream(
+      API + "/api/chat/stream",
+      { messages: apiMessages(convo) },
+      {
+        onToken: (ev) => {
+          if (typing.parentNode) typing.remove();
+          ai.append();
+          ai.appendToken(ev.content || "");
+        },
+        onDone: (done) => {
+          finishReply(convo, done);
+        },
+      }
+    );
   } catch (e) {
     typing.remove();
+    ai.remove();
     chatLog.appendChild(errorCard(e.message));
     scrollBottom();
   } finally {
     isSending = false;
     sendBtn.disabled = false;
     chatInput.focus();
+  }
+}
+
+function finishReply(convo, done) {
+  const typing = chatLog.querySelector(".cmsg .dots");
+  if (typing) typing.closest(".cmsg").remove();
+  if (!done) {
+    chatLog.appendChild(errorCard("Réponse interrompue (aucun événement `done` reçu)."));
+    scrollBottom();
+    return;
+  }
+  (done.events || []).forEach((ev) => {
+    const card = eventCard(ev);
+    if (card) chatLog.appendChild(card);
+  });
+  let warn = null;
+  if (done.warnings && done.warnings.length) {
+    console.warn("warnings", done.warnings, "attempts", done.attempts || []);
+    warn = {
+      warnings: done.warnings,
+      provider: done.provider,
+      fallback_to_demo: !!done.fallback_to_demo,
+      retry_human: done.provider_retry_in_human || "",
+    };
+    chatLog.appendChild(warnCard(warn));
+  }
+  const assistantMsg = { role: "assistant", content: done.reply, events: done.events || [], warn };
+  convo.messages.push(assistantMsg);
+  touch(convo);
+  save();
+
+  // Re-rend pour placer le bouton Régénérer sur le dernier message.
+  renderConvo();
+  renderConvoList();
+  renderTitle();
+
+  // Titre auto : l'IA ne peut nommer la conversation que si l'humain n'a jamais
+  // renommé ("renamedByUser"). Non bloquant : on démarre la requête APRÈS avoir
+  // affiché la réponse, pour ne jamais ralentir le streaming en direct.
+  if (!convo.renamedByUser && !convo.title) {
+    generateAITitle(convo.messages).then((t) => {
+      if (t && !convo.renamedByUser && !convo.title) {
+        convo.title = t;
+        save();
+        renderConvoList();
+        renderTitle();
+      }
+    });
   }
 }
 
@@ -375,30 +546,23 @@ async function regenerate() {
   await requestReply(c);
 }
 
-/* ---------- Statut (topbar + sidebar) ---------- */
+/* ---------- Statut (sidebar uniquement — le titre du haut montre le nom de la
+   conversation, plus le modèle ni le prompt) ---------- */
 function refreshStatus() {
   apiGet("/api/status")
     .then((s) => {
-      const modelEl = document.getElementById("model-name");
-      if (modelEl) {
-        modelEl.textContent = s.demo_mode
-          ? "self-improving IA · démo"
-          : `self-improving IA · ${s.primary_provider}${s.model ? " · " + s.model : ""}`;
-      }
       const side = document.getElementById("side-status");
-      if (side) {
-        const main = (s.prompts || []).find((p) => p.id === "main");
-        const pv = main ? ` · prompt v${main.version} (${esc(s.prompt_updated_by)})` : "";
-        if (!s.demo_mode) {
-          side.innerHTML = `<span class="chip ok">${esc(s.primary_provider)}${pv}</span>`;
-        } else if (s.provider_errors && s.provider_errors.length) {
-          side.innerHTML = `<span class="chip warn" title="${esc(s.provider_errors.join(" · "))}">démo · moteurs au repos${s.provider_retry_in_human ? ` (${esc(s.provider_retry_in_human)})` : ""}${pv}</span>`;
-        } else {
-          side.innerHTML = `<span class="chip warn">démo locale (sans clé API)${pv}</span>`;
-        }
-        const backend = s.store_backend || "local";
-        const repo = s.store_repo ? ` · ${esc(s.store_repo)}` : "";
-        side.innerHTML += ` <span class="chip" title="Base de données active">${icon("database")}<span>store: ${esc(backend)}${repo}</span></span>`;
+      if (!side) return;
+      const main = (s.prompts || []).find((p) => p.id === "main");
+      const pv = main ? ` · prompt v${main.version}` : "";
+      // Détaillé et discret : on ne montre plus « prompt main v2 (ai) » ni
+      // « store: github · repo » — juste l'état du moteur.
+      if (!s.demo_mode) {
+        side.innerHTML = `<span class="chip ok">${esc(s.primary_provider)}${pv}</span>`;
+      } else if (s.provider_errors && s.provider_errors.length) {
+        side.innerHTML = `<span class="chip warn" title="${esc(s.provider_errors.join(" · "))}">démo · moteurs au repos${s.provider_retry_in_human ? ` (${esc(s.provider_retry_in_human)})` : ""}${pv}</span>`;
+      } else {
+        side.innerHTML = `<span class="chip warn">démo locale (aucune clé API)${pv}</span>`;
       }
     })
     .catch(() => {});
@@ -416,7 +580,6 @@ async function retestProviders(btn) {
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = RETEST_HTML; }
     refreshStatus();
-    renderStatusChip();
   }
 }
 
@@ -457,7 +620,11 @@ try { if (!isMobile() && localStorage.getItem(LS_SIDE) === "closed") document.bo
 
 /* ---------- Init ---------- */
 chatForm.addEventListener("submit", (e) => { e.preventDefault(); send(); });
-document.getElementById("new-chat").addEventListener("click", newChat);
+const topNewChat = document.getElementById("top-new-chat");
+if (topNewChat) topNewChat.addEventListener("click", newChat);
+document.querySelectorAll("a[href='/index.html']").forEach((a) => {
+  a.addEventListener("click", (e) => { e.preventDefault(); newChat(); });
+});
 convoSearch.addEventListener("input", renderConvoList);
 document.querySelectorAll(".sugg-card").forEach((b) => b.addEventListener("click", () => send(b.dataset.q)));
 
@@ -465,6 +632,5 @@ load();
 renderConvoList();
 renderConvo();
 refreshStatus();
-renderStatusChip();
 autoresize();
 chatInput.focus();

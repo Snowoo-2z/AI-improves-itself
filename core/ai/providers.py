@@ -37,7 +37,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import httpx
 
@@ -74,6 +74,15 @@ class ProviderError(RuntimeError):
 
 class ProviderUnavailable(ProviderError):
     """Tous les providers cloud sont au repos : le site bascule en démo locale."""
+
+
+class StreamInterruptedError(ProviderError):
+    """Flux SSE interrompu APRÈS le statut 200 (coupure réseau/fournisseur).
+
+    Le réflexe de l'appelant : abandonner le streaming et relancer la même
+    requête en non-streamé via `chat_with_failover`, pour ne jamais rester
+    sur une réponse à moitié écrite.
+    """
 
 
 @dataclass
@@ -553,12 +562,22 @@ class OpenAICompatProvider:
                 return dict(fields)
         return {}
 
-    def _payload(self, messages: list[dict], tools: list[dict] | None, model: str, max_tokens: int | None) -> dict:
+    def _payload(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None,
+        model: str,
+        max_tokens: int | None,
+        *,
+        stream: bool = False,
+    ) -> dict:
         body: dict[str, Any] = {"model": model, "messages": messages, "temperature": 0.7}
         if tools:
             body["tools"] = tools
         if max_tokens:
             body[self._token_key(model)] = max_tokens
+        if stream:
+            body["stream"] = True
         body.update(self._extra_body_for(model))
         return body
 
@@ -598,6 +617,129 @@ class OpenAICompatProvider:
                 model = nxt
         assert last_exc is not None
         raise last_exc
+
+    def stream_chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> Iterator[ProviderResult]:
+        """Streaming SSE OpenAI-compatible (Mistral/Gemini/Groq/OpenRouter/NVIDIA).
+
+        Yields un `ProviderResult` par fragment : `content` = le delta d'un jeton
+        (peut être vide), `tool_calls` = le delta de tool_calls si le modèle
+        commence un appel d'outil. Les fragments « usage */role/finish_reason »
+        sont ignorés.
+
+        En cas de 429 « fenêtre glissante », le modèle suivant du provider est
+        essayé (pools de quota séparés) puis l'exception est relancée. Si le flux
+        se coupe APRÈS le statut 200 (coupure réseau/fournisseur), on lève
+        `StreamInterruptedError` : l'appelant sait qu'une partie des jetons est
+        déjà partie et décide quoi faire (reprendre en non-streamé, ou garder la
+        réponse partielle).
+        """
+        last_exc: Exception | None = None
+        tried: list[str] = []
+        model = self.model
+        while True:
+            if model in tried:
+                break
+            tried.append(model)
+            try:
+                yield from self._post_stream(
+                    self._payload(messages, tools, model, None, stream=True),
+                    model=model,
+                )
+                return
+            except StreamInterruptedError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — on replie comme en non-streamé
+                last_exc = exc
+                failure = classify_failure(
+                    exc, provider_name=self.name, model=model, limits=self.limits, daily_tz=self.daily_tz
+                )
+                if failure.kind != "rate_limit":
+                    break
+                nxt = self._rotate_model(model)
+                if not nxt:
+                    break
+                model = nxt
+        assert last_exc is not None
+        raise last_exc
+
+    def _post_stream(
+        self,
+        body: dict[str, Any],
+        *,
+        model: str,
+    ) -> Iterator[ProviderResult]:
+        """Un appel streamé unique : produit les fragments SSE d'un modèle."""
+        url = f"{self.base_url}/chat/completions"
+        self._throttle()
+        started = False
+        try:
+            with httpx.stream(
+                "POST",
+                url,
+                headers=self._headers(),
+                json=body,
+                timeout=httpx.Timeout(connect=30.0, read=240.0, write=60.0, pool=10.0),
+            ) as resp:
+                resp.raise_for_status()
+                self._record_quota(resp)
+                started = True
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    line = line.strip()
+                    # `data: [DONE]` marque la fin propre du flux.
+                    if line.startswith("data:"):
+                        payload = line[len("data:"):].strip()
+                        if payload == "[DONE]":
+                            return
+                        try:
+                            data = json.loads(payload)
+                        except ValueError:
+                            continue
+                        chunk = self._parse_chunk(data, model)
+                        if chunk is not None:
+                            yield chunk
+        except httpx.HTTPStatusError:
+            # Un flux peut s'ouvrir (200) puis être coupé en cours de route : le
+            # client doit pouvoir réessayer en non-streamé.
+            raise StreamInterruptedError("flux interrompu par le fournisseur")
+        except (httpx.TimeoutException, httpx.TransportError):
+            if started:
+                raise StreamInterruptedError("flux interrompu (timeout/réseau)")
+            raise
+
+    def _parse_chunk(self, data: Any, model: str) -> ProviderResult | None:
+        """Fragment SSE → ProviderResult (content = delta de token, tool_calls = delta)."""
+        if not isinstance(data, dict):
+            return None
+        try:
+            choice = data["choices"][0]
+        except (KeyError, IndexError, TypeError):
+            return None
+        delta = choice.get("delta") or choice.get("message") or {}
+        if not isinstance(delta, dict):
+            return None
+        content = delta.get("content")
+        if not isinstance(content, str):
+            content = ""
+        tool_calls = None
+        raw_tool_calls = delta.get("tool_calls")
+        if isinstance(raw_tool_calls, list) and raw_tool_calls:
+            tool_calls = [tc for tc in raw_tool_calls if isinstance(tc, dict)]
+        mdl = data.get("model") or model
+        if not content and not tool_calls:
+            return None
+        return ProviderResult(
+            content=content,
+            tool_calls=tool_calls or None,
+            provider=self.name,
+            model=mdl,
+            raw=data,
+        )
 
     def ping(self) -> None:
         """1 token, timeout courte : vérifier que la clé + l'endpoint répondent."""
@@ -1224,6 +1366,235 @@ def chat_with_failover(
         attempts=attempts,
         fell_back_to_demo=True,
     )
+
+
+class StreamAccumulator:
+    """Recompose le flux d'un provider en réponse texte + d'éventuels tool_calls.
+
+    - `text`      : les deltas de contenu concaténés (vide si tool_call pur).
+    - `tool_calls()` : les tool_calls finaux une fois le flux terminé ([] sinon).
+      Lève `StreamInterruptedError` si un appel d'outil est incomplet.
+    """
+
+    def __init__(self, provider_name: str = "", model: str = "") -> None:
+        self.text = ""
+        self.provider = provider_name
+        self.model = model
+        self._call_parts: list[ProviderResult] = []
+
+    def add(self, frag: ProviderResult) -> None:
+        self.provider = frag.provider or self.provider
+        self.model = frag.model or self.model
+        self.text += frag.content or ""
+        if frag.tool_calls:
+            self._call_parts.append(frag)
+
+    def tool_calls(self) -> list[dict]:
+        if not self._call_parts:
+            return []
+        picks: dict[int, dict] = {}
+        for frag in self._call_parts:
+            for tc in frag.tool_calls or []:
+                idx = tc.get("index")
+                if not isinstance(idx, int):
+                    idx = 0
+                slot = picks.setdefault(
+                    idx,
+                    {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                )
+                fn = tc.get("function") or {}
+                if tc.get("id"):
+                    slot["id"] = tc["id"]
+                if tc.get("type"):
+                    slot["type"] = tc["type"]
+                if fn.get("name"):
+                    slot["function"]["name"] = fn["name"]
+                if fn.get("arguments"):
+                    slot["function"]["arguments"] += fn["arguments"]
+        picked = [picks[i] for i in sorted(picks)]
+        # Un tool_call dont les arguments ne sont pas terminés (flux coupé) est
+        # invalide : on le signale pour forcer un re-routage non-streamé.
+        for c in picked:
+            try:
+                json.loads(c["function"]["arguments"] or "{}")
+            except ValueError as exc:
+                raise StreamInterruptedError("appel d'outil incomplet dans le flux") from exc
+        return picked
+
+
+def stream_with_failover(
+    messages: list[dict],
+    tools: list[dict] | None = None,
+    *,
+    chain: list[Any] | None = None,
+) -> Iterator[dict]:
+    """Variante streamée de `chat_with_failover` : un générateur qui diffuse EN DIRECT.
+
+    Événements produits (à destination de l'orchestrateur de `core/ai/chat.py`) :
+    - `{"type": "token", "content", "provider", "model"}` : un delta de la réponse
+      finale (le front l'affiche tel quel, en direct).
+    - `{"type": "result", "result": ProviderResult, "provider": Provider,
+       "errors": [...], "attempts": [...]}` : le résultat complet (contenu final
+      ET tool_calls éventuels), quand le flux est proprement terminé.
+
+    Règles :
+    - On ne diffuse des `token` que pour une vraie réponse texte. Un pur appel
+      d'outil (aucun texte) ne produit AUCUN token : les deltas de tool_call sont
+      accumulés en interne (`StreamAccumulator`) puis rendus dans `result`.
+    - Flux coupé après 200 → `StreamInterruptedError` → bascule NON-streamée via
+      `chat_with_failover` (la réponse complète arrive d'un bloc).
+    - 429 / moteur au repos → même cascade que le non-streamé (provider suivant,
+      puis démo locale).
+    """
+    global _preferred
+    chain = chain if chain is not None else build_chain()
+    cloud = [p for p in chain if p.name != "demo-local"]
+    demo = next((p for p in chain if p.name == "demo-local"), _demo_provider())
+
+    with _state_lock:
+        preferred = _preferred
+    preferred_name = getattr(preferred, "name", None)
+    ordered: list[Any] = [p for p in cloud if p.name == preferred_name] if preferred_name else []
+    ordered.extend(p for p in cloud if not any(p.name == o.name for o in ordered))
+
+    errors: list[str] = []
+    attempts: list[dict] = []
+
+    for provider in ordered:
+        wait = HEALTH.ready_in(provider.name)
+        if wait > 0.0:
+            snapshot = HEALTH.snapshot().get(provider.name, {})
+            failure = snapshot.get("failure") or {}
+            reason = failure.get("message") or f"{provider.name}: au repos"
+            errors.append(f"{reason} (repos encore {human_delay(wait)})")
+            attempts.append(
+                {
+                    "provider": provider.name,
+                    "model": getattr(provider, "model", ""),
+                    "status": "skipped",
+                    "reason": f"cooling_down:{int(wait)}s",
+                }
+            )
+            continue
+        streamer = getattr(provider, "stream_chat", None)
+        if not callable(streamer):
+            # Provider sans méthode stream (ne devrait pas arriver) : non-streamé.
+            outcome = chat_with_failover(messages, tools)
+            if outcome.result.content:
+                yield {
+                    "type": "token",
+                    "content": outcome.result.content,
+                    "provider": outcome.provider.name,
+                    "model": outcome.result.model or getattr(outcome.provider, "model", ""),
+                }
+            yield {
+                "type": "result",
+                "result": outcome.result,
+                "provider": outcome.provider,
+                "errors": errors + outcome.errors,
+                "attempts": attempts + outcome.attempts,
+            }
+            return
+        try:
+            acc = StreamAccumulator(provider.name, getattr(provider, "model", ""))
+            opened = False
+            for frag in streamer(messages, tools):
+                opened = True
+                acc.add(frag)
+                if frag.content:
+                    yield {
+                        "type": "token",
+                        "content": frag.content,
+                        "provider": provider.name,
+                        "model": frag.model or getattr(provider, "model", ""),
+                    }
+            if not opened:
+                continue  # flux vide : passe au provider suivant (rare)
+            tool_calls = acc.tool_calls()
+            HEALTH.note_success(provider.name)
+            with _state_lock:
+                _preferred = provider
+            result = ProviderResult(
+                content=acc.text,
+                tool_calls=tool_calls or None,
+                provider=provider.name,
+                model=acc.model or getattr(provider, "model", ""),
+            )
+            attempts.append(
+                {"provider": provider.name, "model": result.model, "status": "ok", "streamed": True}
+            )
+            yield {"type": "result", "result": result, "provider": provider, "errors": errors, "attempts": attempts}
+            return
+        except StreamInterruptedError as exc:
+            # Flux ouvert puis coupé : impossible de le reprendre là où il s'est
+            # arrêté → on redemande la réponse complète en non-streamé. Le front
+            # remplacera le texte partiel par `done.reply` de toute façon.
+            errors.append(f"{provider.name}: {exc}")
+            attempts.append(
+                {
+                    "provider": provider.name,
+                    "model": getattr(provider, "model", ""),
+                    "status": "failed",
+                    "kind": "stream_interrupted",
+                    "reason": str(exc),
+                }
+            )
+            outcome = chat_with_failover(messages, tools)
+            yield {
+                "type": "result",
+                "result": outcome.result,
+                "provider": outcome.provider,
+                "errors": errors + outcome.errors,
+                "attempts": attempts + outcome.attempts,
+            }
+            return
+        except Exception as exc:  # noqa: BLE001 — on replie vers le moteur suivant
+            current_model = getattr(provider, "model", "")
+            failure = classify_failure(
+                exc,
+                provider_name=provider.name,
+                model=current_model,
+                limits=getattr(provider, "limits", None),
+                daily_tz=getattr(provider, "daily_tz", "utc"),
+            )
+            wait_s = cooldown_for(failure, getattr(provider, "daily_tz", "utc"))
+            HEALTH.note_failure(provider.name, failure, wait_s)
+            message = failure.message
+            if failure.hint:
+                message = f"{message} → {failure.hint}"
+            errors.append(f"{message} (repos {human_delay(wait_s)}, essai du moteur suivant)")
+            attempts.append(
+                {
+                    "provider": provider.name,
+                    "model": failure.model or getattr(provider, "model", ""),
+                    "status": "failed",
+                    "kind": failure.kind,
+                    "reason": message[:200],
+                }
+            )
+
+    # Tous les moteurs cloud sont au repos ou en échec : démo locale.
+    with _state_lock:
+        _preferred = demo
+    result = demo.chat(messages, tools)
+    attempts.append({"provider": demo.name, "model": demo.model, "status": "ok"})
+    if not errors:
+        errors = provider_errors()
+    if not result.tool_calls and result.content:
+        yield {
+            "type": "token",
+            "content": result.content,
+            "provider": demo.name,
+            "model": result.model or demo.model,
+        }
+    yield {
+        "type": "result",
+        "result": result,
+        "provider": demo,
+        "errors": errors,
+        "attempts": attempts,
+        "fell_back_to_demo": True,
+    }
 
 
 def ping_chain(force: bool = False) -> dict:
