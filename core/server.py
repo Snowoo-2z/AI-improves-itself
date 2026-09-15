@@ -76,11 +76,18 @@ class ResearchResult(BaseModel):
 def status() -> dict:
     s = store_module.get_store()
     main = registry.get_current("main")
+    # `health_report()` ne fait AUCUN appel réseau : il lit l'état des moteurs
+    # (qui est au repos, pourquoi, dans combien de temps il est re-testé).
+    health = providers.health_report()
     provider_name = providers.primary_provider_name()
     return {
         "primary_provider": provider_name,
+        "model": health["limits"].get(provider_name, {}).get("model", ""),
         "demo_mode": provider_name == "demo-local",
-        "provider_errors": providers.active_provider_errors(),
+        "provider_errors": health["errors"],
+        "provider_retry_in_s": health["retry_in_s"],
+        "provider_retry_in_human": health["retry_in_human"],
+        "provider": health,
         "prompt_main_version": main.get("version"),
         "prompt_updated_by": main.get("updated_by"),
         "prompts": [
@@ -93,6 +100,27 @@ def status() -> dict:
             "research_results": len(s.list("research_results")),
             "knowledge": len(s.list("knowledge", default=_knowledge_seed())),
         },
+    }
+
+
+@app.post("/api/providers/retest")
+def retest_providers(payload: dict | None = None) -> dict:
+    """Re-tester la chaîne de providers à la demande (bouton « retester » du site).
+
+    `force=true` réveille aussi les moteurs au repos : utile après avoir changé
+    une clé dans `.env`, mais ça consomme un appel par provider — sur un tier
+    gratuit à 50 requêtes/jour (OpenRouter), à ne pas spammer.
+    """
+    force = bool((payload or {}).get("force"))
+    report = providers.ping_chain(force=force)
+    providers.invalidate_provider_cache()
+    health = providers.health_report()
+    return {
+        "ok": True,
+        "ping": report,
+        "active": health["active"],
+        "errors": health["errors"],
+        "retry_in_human": health["retry_in_human"],
     }
 
 

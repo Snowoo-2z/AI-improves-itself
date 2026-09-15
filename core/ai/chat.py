@@ -16,7 +16,7 @@ from core import store as store_module
 from core.prompt_system import registry
 from core.skills import manager as skills_manager
 
-from .providers import build_chain, get_active_provider, invalidate_provider_cache
+from .providers import chat_with_failover, human_delay, next_retry_in
 
 MAX_TOOL_ITERATIONS = 6
 
@@ -84,29 +84,31 @@ def handle_chat(history: list[dict]) -> dict:
     tools = skills_manager.to_openai_tools()
 
     events: list[dict] = []
+    errors: list[str] = []
+    error_providers: set[str] = set()  # un avertissement par moteur, pas de doublon
     reply = ""
+    attempts: list[dict] = []
 
-    # --- Choix du provider (sélection testée UNE fois par process, puis en cache) ---
-    provider, errors = get_active_provider()
-    provider_name = provider.name
-
-    # --- Boucle principale : LLM ↔ outils ---
-    for _ in range(MAX_TOOL_ITERATIONS):
-        try:
-            result = provider.chat(messages, tools)
-        except Exception as exc:  # noqa: BLE001
-            if provider.name != "demo-local":
-                errors.append(f"{provider.name}: {exc}")
-                # Le provider en panne est écarté du cache : le prochain message
-                # re-testera la chaîne complète (il peut être rétabli d'ici là).
-                invalidate_provider_cache()
-                fallback = next((p for p in build_chain() if p.name == "demo-local"), provider)
-                provider = fallback
-                provider_name = provider.name
-                result = provider.chat(messages, tools)
-            else:
-                raise
-        provider_name = result.provider or provider_name
+    # --- Boucle principale : LLM ↔ outils -----------------------------------
+    # Chaque appel passe par la chaîne de repli : moteur préféré → autres
+    # moteurs hors repos → démo locale. Un 429 sur Mistral n'envoie plus le
+    # site en mode démo si une clé Groq/Gemini valide existe : le moteur
+    # suivant répond, et Mistral est mis au repos pour sa fenêtre de quota.
+    provider_name = ""
+    for iteration in range(MAX_TOOL_ITERATIONS):
+        outcome = chat_with_failover(messages, tools)
+        result = outcome.result
+        attempts.extend({**a, "iteration": iteration} for a in outcome.attempts)
+        for message in outcome.errors:
+            # Les mêmes moteurs peuvent échouer à chaque itération de la boucle
+            # d'outils : on n'affiche qu'un avertissement par moteur (le premier,
+            # le plus informatif) pour ne pas noyer la bannière du site.
+            name = message.split(":", 1)[0]
+            if name in error_providers:
+                continue
+            error_providers.add(name)
+            errors.append(message)
+        provider_name = result.provider or outcome.provider.name
 
         if result.tool_calls:
             messages.append(
@@ -158,12 +160,20 @@ def handle_chat(history: list[dict]) -> dict:
                 }
             )
 
-    out = {
+    out: dict = {
         "reply": reply,
         "provider": provider_name,
+        "model": getattr(result, "model", "") or "",
         "events": events,
         "prompt_ids": [p["id"] for p in chosen],
     }
     if errors:
+        retry_in = next_retry_in()
         out["warnings"] = errors
+        out["fallback_to_demo"] = provider_name == "demo-local"
+        # Le site affiche « nouvel essai automatique dans … » : autant donner la
+        # vraie durée (fenêtre ~1 min, quota journalier → minuit, modèle retiré → 1 h).
+        out["provider_retry_in_s"] = round(retry_in, 1)
+        out["provider_retry_in_human"] = human_delay(retry_in) if retry_in else ""
+        out["attempts"] = attempts
     return out

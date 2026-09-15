@@ -53,8 +53,17 @@ function renderStatusChip() {
   if (!el) return;
   apiGet("/api/status")
     .then((s) => {
+      // MODE DÉMO peut vouloir dire deux choses très différentes : aucune clé
+      // configurée, OU moteurs cloud au repos (429 / quota journalier / réseau).
+      let mode = "MODE DÉMO";
+      if (!s.demo_mode) {
+        mode = esc(s.primary_provider).toUpperCase();
+      } else if (s.provider_errors && s.provider_errors.length) {
+        mode = "DÉMO · MOTEURS AU REPOS" + (s.provider_retry_in_human ? ` (${esc(s.provider_retry_in_human)})` : "");
+      }
+      const title = (s.provider_errors || []).join("\n");
       el.innerHTML =
-        `<span class="chip ${s.demo_mode ? "warn" : "ok"}">${s.demo_mode ? "MODE DÉMO" : esc(s.primary_provider).toUpperCase()}</span> ` +
+        `<span class="chip ${s.demo_mode ? "warn" : "ok"}"${title ? ` title="${esc(title)}"` : ""}>${mode}</span> ` +
         `<span class="chip">prompt main v${s.prompt_main_version} (${esc(s.prompt_updated_by)})</span>`;
     })
     .catch(() => { el.textContent = "API indisponible"; });

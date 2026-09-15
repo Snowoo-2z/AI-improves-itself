@@ -49,15 +49,23 @@ async function send(text) {
     history.push({ role: "assistant", content: res.reply });
     if (res.warnings && res.warnings.length) {
       // Visible dans le chat (avant : console uniquement) : l'utilisateur doit
-      // savoir qu'un provider a échoué et qu'un fallback a pris le relais.
-      console.warn("warnings", res.warnings);
+      // savoir quel moteur a échoué, LEQUEL répond à la place, et QUAND le
+      // moteur au repos sera re-testé (fenêtre ~1 min, quota journalier → minuit…).
+      console.warn("warnings", res.warnings, "attempts", res.attempts || []);
       const w = document.createElement("div");
       w.className = "event";
+      const retry = res.provider_retry_in_human
+        ? ` · nouvel essai automatique dans <b>${esc(res.provider_retry_in_human)}</b>`
+        : "";
+      const served = res.fallback_to_demo ? "mode démo local" : `moteur <b>${esc(res.provider)}</b>`;
       w.innerHTML =
-        `<span class="e-title">⚠️ Fallback de provider</span>` +
-        `<div class="e-detail">${esc(res.warnings.join(" · "))}</div>`;
+        `<span class="e-title">⚠️ Repli de moteur → ${served}${retry}</span>` +
+        `<div class="e-detail">${res.warnings.map(esc).join("<br>")}</div>` +
+        `<div class="e-detail"><button class="hint-btn" type="button" id="retest-providers">🔁 re-tester la chaîne maintenant</button></div>`;
       chatLog.appendChild(w);
       chatLog.scrollTop = chatLog.scrollHeight;
+      const retestBtn = document.getElementById("retest-providers");
+      if (retestBtn) retestBtn.addEventListener("click", () => retestProviders(retestBtn));
     }
     refreshSide();
   } catch (e) {
@@ -90,12 +98,40 @@ function refreshSide() {
           </table>`;
       }
       if (providerChip) {
-        providerChip.innerHTML = s.demo_mode
-          ? '<span class="chip warn">demo-local (sans clé API)</span>'
-          : `<span class="chip ok">${esc(s.primary_provider)}</span>`;
+        // Trois états réels : moteur cloud actif, démo faute de clé, démo parce
+        // que les moteurs cloud sont au repos (429 / quota journalier / réseau).
+        if (!s.demo_mode) {
+          const model = s.model ? ` · ${esc(s.model)}` : "";
+          providerChip.innerHTML = `<span class="chip ok">${esc(s.primary_provider)}${model}</span>`;
+        } else if (s.provider_errors && s.provider_errors.length) {
+          providerChip.innerHTML =
+            `<span class="chip warn" title="${esc(s.provider_errors.join(" · "))}">demo-local · moteurs au repos` +
+            (s.provider_retry_in_human ? ` (essai dans ${esc(s.provider_retry_in_human)})` : "") +
+            `</span>`;
+        } else {
+          providerChip.innerHTML = '<span class="chip warn">demo-local (sans clé API)</span>';
+        }
       }
     })
     .catch(() => {});
+}
+
+async function retestProviders(btn) {
+  // Re-test forcé de la chaîne : utile juste après avoir ajouté une clé dans
+  // .env, mais chaque test consomme 1 appel par provider (quota gratuit !).
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ test des moteurs…"; }
+  try {
+    const res = await apiPost("/api/providers/retest", { force: true });
+    const lines = Object.entries(res.ping || {}).map(([k, v]) => `${k} → ${v}`).join("\n");
+    toast(res.errors && res.errors.length ? "Moteurs testés : " + res.errors.length + " en repos" : "Moteurs testés ✅");
+    console.info("re-test de la chaîne\n" + lines);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "🔁 re-tester la chaîne maintenant"; }
+    refreshSide();
+    renderStatusChip();
+  }
 }
 
 chatForm.addEventListener("submit", (e) => { e.preventDefault(); send(); });
