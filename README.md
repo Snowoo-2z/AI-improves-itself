@@ -70,6 +70,13 @@ Sans `.env` : le serveur démarre en **mode démo local** (moteur déterministe,
 toute la boucle d'auto-amélioration). Avec `MISTRAL_API_KEY` : le vrai moteur Mistral prend le
 relais (les autres clés = fallback automatique).
 
+> 💡 **Tier gratuit Mistral** : ~1 requête/seconde et fenêtres de quota glissantes (~1 min).
+> Le cœur gère les 429 tout seul (pause entre appels, retry automatique, repos ~1 min puis
+> re-test de la chaîne). Si tu vois le mode démo avec une erreur 429 : quota de la fenêtre
+> épuisé — ça reprend automatiquement, ou vérifie [Admin Console → Limits](https://admin.mistral.ai/plateforme/limits).
+> Pour un fallback « vrai moteur » au lieu du démo, ajoute une clé **Groq** (la plus simple :
+> sans carte, ~30 req/min) ou Gemini/OpenRouter dans `.env`.
+
 ## 🔌 Brancher le reste
 
 - **Supabase** : créer un projet → SQL Editor → exécuter `supabase/schema.sql` → renseigner

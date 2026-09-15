@@ -10,12 +10,30 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
 from .config import env
+
+
+# ---------------------------------------------------------------------------
+# Limites du tier gratuit Mistral (La Plateforme, plan « Free mode »/Experiment) :
+# ~1 requête/seconde + fenêtres de tokens glissantes (~1 min). En cas de 429
+# (trop de requêtes / quota de fenêtre épuisé) ou d'erreur 5xx passagère, on
+# RETENTE automatiquement en respectant l'en-tête Retry-After s'il existe :
+# la plupart des 429 du tier gratuit passent avec 1-2 secondes de pause.
+# ---------------------------------------------------------------------------
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 2  # essais supplémentaires après le premier appel
+_RETRY_BACKOFF_S = (1.0, 2.5)  # pause avant la 1re puis la 2e relance (sans Retry-After)
+_RETRY_MAX_WAIT_S = 10.0  # borne haute d'une pause (Retry-After absurde → on borne)
+
+
+class ProviderError(RuntimeError):
+    """Erreur d'appel provider avec un message clair pour la bannière ⚠️ du site."""
 
 
 @dataclass
@@ -44,24 +62,75 @@ class OpenAICompatProvider(BaseProvider):
     """Client minimaliste pour toute API compatible OpenAI (Mistral, Groq,
     OpenRouter, Gemini endpoint compatible, ...)."""
 
-    def __init__(self, name: str, base_url: str, api_key: str, model: str):
+    def __init__(
+        self, name: str, base_url: str, api_key: str, model: str, min_interval: float = 0.0
+    ):
         self.name = name
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
+        # Throttle : intervalle MINIMAL entre deux appels vers ce provider. Utile
+        # pour les tiers gratuits limités en requêtes/seconde (Mistral ~1 req/s) :
+        # ping + appel de chat + boucle d'outils ne partent plus en rafale.
+        self.min_interval = max(0.0, float(min_interval))
+        self._throttle_lock = threading.Lock()
+        self._next_allowed_at = 0.0
+
+    def _throttle(self) -> None:
+        """Sérialiser les appels pour respecter la limite requêtes/seconde."""
+        if self.min_interval <= 0.0:
+            return
+        with self._throttle_lock:
+            wait = self._next_allowed_at - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            self._next_allowed_at = time.monotonic() + self.min_interval
+
+    @staticmethod
+    def _retry_after_seconds(response: httpx.Response) -> float:
+        """Pause à respecter d'après l'en-tête Retry-After (bornée, défaut 0)."""
+        raw = response.headers.get("retry-after")
+        if not raw:
+            return 0.0
+        try:
+            return min(max(0.0, float(raw)), _RETRY_MAX_WAIT_S)
+        except ValueError:
+            return 0.0
 
     def _post(self, body: dict[str, Any], timeout: float) -> dict:
-        resp = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES + 1):
+            self._throttle()
+            try:
+                resp = httpx.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                    timeout=timeout,
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                status = exc.response.status_code
+                if status not in _RETRYABLE_STATUS or attempt >= _MAX_RETRIES:
+                    break
+                pause = self._retry_after_seconds(exc.response) or _RETRY_BACKOFF_S[attempt]
+                time.sleep(pause)
+        # Dernier essai en 429 : message explicite (tier gratuit plutôt qu'erreur brute).
+        if isinstance(last_exc, httpx.HTTPStatusError) and last_exc.response.status_code == 429:
+            raise ProviderError(
+                "429 Too Many Requests — limite du tier gratuit Mistral atteinte "
+                "(~1 requête/seconde, fenêtres de tokens glissantes ~1 min, quota "
+                "mensuel éventuellement épuisé). Nouvel essai automatique dans ~1 min ; "
+                "sinon vérifie https://admin.mistral.ai/plateforme/limits ou ajoute une "
+                "clé Gemini/Groq/OpenRouter dans .env comme moteur de secours."
+            ) from last_exc
+        assert last_exc is not None  # impossible : la boucle ne sort que sur erreur
+        raise last_exc
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ProviderResult:
         body: dict[str, Any] = {
@@ -115,6 +184,18 @@ _DEMO_EXPLAINED = (
     "mon défaut, puis je modifierai mon propre prompt système pour me corriger. "
     "Pose la question deux fois pour voir la différence. "
     "Pour m'activer réellement : renseigne `MISTRAL_API_KEY` (ou Gemini/Groq/OpenRouter) dans `.env`."
+)
+
+# Variante quand des clés EXISTENT mais que les providers cloud sont indisponibles
+# (429 quota/limite de débit du tier gratuit, réseau, ...) : ne pas prétendre
+# qu'aucune clé n'est configurée.
+_DEMO_EXPLAINED_CLOUD_DOWN = (
+    "⚠️ Mes moteurs cloud sont momentanément indisponibles (limites du tier "
+    "gratuit atteintes — 429 — ou erreur réseau) : je réponds en **mode démo "
+    "local** en attendant. La chaîne de providers est re-testée automatiquement "
+    "d'ici ~1 minute, tu peux aussi renvoyer ton message. "
+    "Essaie : **« Quel est le dernier jeu Zelda ? »** pour voir la mécanique "
+    "d'auto-amélioration pendant ce temps."
 )
 
 _DATE_RULE_MARKER = "[REGLE-AJOUTEE-PAR-IA]"
@@ -246,7 +327,10 @@ class LocalDemoProvider(BaseProvider):
                 ],
                 provider=self.name,
             )
-        return ProviderResult(content=_DEMO_EXPLAINED, provider=self.name)
+        # Clés cloud indisponibles (erreurs enregistrées) ≠ aucune clé configurée :
+        # adapter le message affiché à l'utilisateur.
+        explained = _DEMO_EXPLAINED_CLOUD_DOWN if active_provider_errors() else _DEMO_EXPLAINED
+        return ProviderResult(content=explained, provider=self.name)
 
 
 def build_chain() -> list[BaseProvider]:
@@ -256,7 +340,13 @@ def build_chain() -> list[BaseProvider]:
     if mistral_key:
         chain.append(
             OpenAICompatProvider(
-                "mistral", "https://api.mistral.ai/v1", mistral_key, env("MISTRAL_MODEL", "mistral-small-latest")
+                "mistral",
+                "https://api.mistral.ai/v1",
+                mistral_key,
+                env("MISTRAL_MODEL", "mistral-small-latest"),
+                # Tier gratuit : ~1 requête/seconde → espacer les appels (ping,
+                # chat, boucle d'outils) pour éviter le 429 dès la 2e requête.
+                min_interval=1.05,
             )
         )
     gemini_key = env("GEMINI_API_KEY")
@@ -299,21 +389,49 @@ def build_chain() -> list[BaseProvider]:
 # fois (au premier besoin) avec un ping de 1 token, le résultat est mis en
 # cache, et le cache est invalidé si le provider échoue en cours de route
 # (retour automatique sur demo-local pour le message en cours).
+#
+# Deuxième correctif (tier gratuit) : après un échec cloud (429 du tier gratuit
+# Mistral, réseau, ...), on ne re-ping PAS à chaque message. Les fenêtres de
+# quota gratuites sont glissantes (~1 min) : re-tester plus tôt ne ferait que
+# renvoyer des 429 et épuiser le quota. On sert le mode démo avec l'erreur
+# affichée, puis la chaîne est RE-TESTÉE AUTOMATIQUEMENT après le repos — le
+# provider reprend la main tout seul quand sa limite se libère.
 # ---------------------------------------------------------------------------
 _selection_lock = threading.Lock()
 _active_provider: BaseProvider | None = None
 _active_provider_errors: list[str] = []
+_selection_failed_at = 0.0  # (time.monotonic) 0 = aucun échec en cours
+_SELECTION_COOLDOWN_S = 60.0
 
 
 def get_active_provider() -> tuple[BaseProvider, list[str]]:
     """Renvoyer le premier provider disponible (testé UNE fois, puis mis en cache).
 
+    Après un échec cloud : repos de ~_SELECTION_COOLDOWN_S en mode démo SANS
+    appel réseau (les fenêtres de quota gratuites sont glissantes ~1 min),
+    puis re-test automatique de la chaîne.
+
     Retourne (provider, erreurs_des_providers_sautés).
     """
-    global _active_provider, _active_provider_errors
+    global _active_provider, _active_provider_errors, _selection_failed_at
     with _selection_lock:
         if _active_provider is not None:
-            return _active_provider, list(_active_provider_errors)
+            on_demo_after_failure = _active_provider.name == "demo-local" and bool(
+                _active_provider_errors
+            )
+            cooldown_over = _selection_failed_at > 0.0 and (
+                time.monotonic() - _selection_failed_at
+            ) >= _SELECTION_COOLDOWN_S
+            # Provider cloud OK, ou démo sans erreur, ou repos pas terminé → garder.
+            if not on_demo_after_failure or not cooldown_over:
+                return _active_provider, list(_active_provider_errors)
+            _active_provider = None  # repos écoulé : on re-teste la chaîne
+        elif _selection_failed_at > 0.0 and (
+            time.monotonic() - _selection_failed_at
+        ) < _SELECTION_COOLDOWN_S:
+            # Échec tout récent (ex. 429 en plein chat) : démo immédiat, sans
+            # re-ping — re-tester maintenant ne ferait que renvoyer un 429.
+            return build_chain()[-1], list(_active_provider_errors)
         chain = build_chain()
         errors: list[str] = []
         for candidate in chain:
@@ -324,24 +442,36 @@ def get_active_provider() -> tuple[BaseProvider, list[str]]:
                 continue
             _active_provider = candidate
             _active_provider_errors = errors
+            # Succès cloud → plus d'échec en cours. « Succès » du démo APRÈS des
+            # erreurs cloud = tous les providers cloud viennent d'échouer : noter
+            # l'heure pour re-tester la chaîne après le repos.
+            _selection_failed_at = time.monotonic() if (candidate.name == "demo-local" and errors) else 0.0
             return candidate, list(errors)
         # Tous les providers cloud sont en échec : on s'accroche au mode démo
-        # (il ne lève jamais d'exception) pour ne jamais bloquer le site.
+        # (il ne lève jamais d'exception) pour ne jamais bloquer le site, et on
+        # note l'heure pour re-tester la chaîne après le repos.
         _active_provider = chain[-1]
         _active_provider_errors = errors
+        _selection_failed_at = time.monotonic()
         return _active_provider, list(errors)
 
 
 def invalidate_provider_cache() -> None:
-    """Le provider actif vient d'échouer : on re-testera la chaîne au prochain message."""
-    global _active_provider
+    """Le provider actif vient d'échouer : démo immédiat, re-test dans ~1 min.
+
+    Le re-test n'est PAS immédiat : pour un 429 (quota/débit du tier gratuit),
+    retenter au message suivant ne ferait que renvoyer un 429. La chaîne sera
+    re-testée automatiquement au premier message après _SELECTION_COOLDOWN_S.
+    """
+    global _active_provider, _selection_failed_at
     with _selection_lock:
         _active_provider = None
+        _selection_failed_at = time.monotonic()
 
 
 def active_provider_errors() -> list[str]:
-    """Erreurs constatées lors de la sélection (vide tant que rien n'a été testé)."""
-    return list(_active_provider_errors) if _active_provider is not None else []
+    """Erreurs constatées lors de la dernière sélection (vide si tout va bien)."""
+    return list(_active_provider_errors)
 
 
 def primary_provider_name() -> str:
