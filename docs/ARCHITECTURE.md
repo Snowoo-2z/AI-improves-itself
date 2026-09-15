@@ -125,7 +125,7 @@ File unique : `research_tasks` (Supabase ou `core/data/research_tasks.json`).
 | Exécutant | Tâches | Déploiement | Points forts |
 |---|---|---|---|
 | **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples) | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
-| **Chromium** (`services/scraper/`) | `fetch` pages à rendu JS | Render (1c-2g) / Oracle Free / Fly.io | rendu complet (Playwright) |
+| **Chromium** (`services/scraper/`) | `fetch` pages à rendu JS | Render `free` (512 Mo, 0 $, tendu pour Chromium) / Oracle Free / `1c-2g` (2 Go, 25 $/mois) si OOM | rendu complet (Playwright) |
 
 Flux : IA → tâche `pending` → exécutant → `done` + `research_results` →
 l'IA lit via `list_research_results` → décide (étude, mise à jour de la base).
@@ -158,14 +158,20 @@ plafond de caractères ; l'objectif est la **recherche ponctuelle**, pas le craw
 5. **Scraping** : whitelist de domaines optionnelle, plafond de taille, UA honnête,
    usage ponctuel (robots.txt des cibles).
 
-## 9. Déploiement (100 % gratuit, sauf le scraper)
+## 9. Déploiement (100 % gratuit)
 
 | Brique | Où | Coût |
 |---|---|---|
-| Site statique + API (core/) | GitHub Pages (site seul) **ou** un seul web service Free (Render/Railway/Oracle) pour tout garder ensemble | 0 $ |
+| Site statique + API (core/) | GitHub Pages (site seul) **ou** un seul web service `free` (Render/Railway/Oracle) pour tout garder ensemble | 0 $ |
 | Base | Supabase free tier | 0 $ |
 | Recherche | Google Colab | 0 $ |
-| Scraper Chromium | Render (plan `1c-2g` = 1 vCPU / 2 Go) **ou** Oracle Cloud Free Tier (ARM) / Fly.io | ~8-12 $/mois **ou** 0 $ (Oracle) |
+| Scraper Chromium | Render plan `free` (**512 Mo**, la seule machine gratuite ; tendu pour Chromium) **ou** Oracle Cloud Free Tier (ARM) ; `1c-2g` (2 Go) = **25 $/mois** si OOM à répétition | 0 $ **ou** 25 $/mois |
+
+> Rappel tarifs Render (vérifié le 2026-09-14 sur render.com/pricing et
+> docs.render.com/compute-plans) : seule la machine **0,1 CPU / 512 Mo** est gratuite
+> (`plan: free`). Payant : `0.5c-512mb` 7 $/mois, `1c-2g` (2 Go) 25 $/mois, `2c-4g`
+> 85 $/mois — pas de palier web à 1 Go (l'échelle saute de 512 Mo à 2 Go).
+> Fly.io n'a plus de tier gratuit pour les comptes créés après le 7 oct. 2024.
 
 Recommandation v0 : tout tourner sur **Oracle Cloud Free Tier** (VM 4 ARM gratuite) :
 serveur du projet + Chromium au même endroit, zéro coût, et `SCRAPER_SERVICE_URL`

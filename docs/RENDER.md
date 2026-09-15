@@ -9,7 +9,13 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 ```
 
 > ⏱ Durée estimée : **30-45 minutes** (le build Docker du scraper prend 5-10 min).
-> 💰 Coût : 2 × `1c-2g` (1 vCPU / 2 Go) ≈ 16-24 $/mois (détail + alternative gratuite en §9).
+> 💰 Coût : **0 $** — les 2 services du `render.yaml` sont sur le plan `free`
+> (0,1 CPU / 512 Mo RAM), la **seule** machine gratuite de Render. Tout le reste
+> est payant : `0.5c-512mb` = 7 $/mois, `1c-2g` (2 Go) = **25 $/mois par service**,
+> `2c-4g` = 85 $/mois. Il n'existe même pas de machine web à 1 Go : l'échelle passe de
+> 512 Mo à 2 Go (prix relevés sur [render.com/pricing](https://render.com/pricing) et
+> [docs.render.com/compute-plans](https://render.com/docs/compute-plans) le 2026-09-14 ;
+> détail + alternatives au §9).
 
 ---
 
@@ -18,7 +24,7 @@ https://aiis-scraper.onrender.com/   ← service de scraping Chromium
 | Ce qu'il faut | Où | Coût |
 |---|---|---|
 | Compte GitHub + ce repo poussé | ✅ déjà fait (contenu sur la branche `main`) | 0 $ |
-| Compte Render | [render.com](https://render.com) → *Sign up with GitHub* | — |
+| Compte Render | [render.com](https://render.com) → *Sign up with GitHub* → workspace **Hobby** | 0 $ (plan `free` : 512 Mo) |
 | Clé API **Mistral** (moteur principal) | [console.mistral.ai/cle](https://console.mistral.ai/cle) → plan gratuit « La Plateforme » | 0 $ |
 | (optionnel) Clé Gemini / Groq / OpenRouter | fallbacks automatiques | 0 $ |
 | (optionnel) Compte Supabase (base de données, phase 2) | [supabase.com](https://supabase.com) | 0 $ (free tier) |
@@ -89,8 +95,10 @@ L'ordre compte : `aiis-core` a besoin de l'URL du scraper.
 3. Teste : ouvre `https://aiis-scraper.onrender.com/health` dans le navigateur →
    tu dois voir `{"ok":true,"service":"scraper-chromium","ts":…}`.
 
-> ⚠️ **First deploy = instance « froide »** : le 1er appel au scraper peut prendre
-> 30-60 s (mise en route de l'instance). Teste deux fois.
+> ⚠️ **Plan `free` = instance qui s'endort** : 15 min sans requête entrante et Render
+> stoppe l'instance ; la requête suivante met **~1 min** à la réveiller (Render affiche
+> une page de chargement pendant ce temps). Le 1er appel après un déploiement est donc
+> lent : teste deux fois. Chaque spin-down efface aussi le filesystem local.
 
 ---
 
@@ -179,7 +187,8 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 | Logs temps réel | onglet **Logs** (recherche possible) |
 | Renommer le sous-domaine | *Settings → Name* (l'URL `.onrender.com` suit) |
 | Domaine custom | *Settings → Custom Domain* (DNS CNAME) |
-| Changer de plan / arrêter | *Settings → Plan* / bouton *Stop* (l'instance dort, les disques restent) |
+| Changer de plan | *Settings → Plan* : `free` (512 Mo, 0 $) → `0.5c-512mb` (7 $) → `1c-2g` (2 Go, 25 $) — changement appliqué au redéploiement |
+| Arrêter / laisser dormir | bouton *Stop* ; en plan `free` l'instance s'endort seule après 15 min d'inactivité (pas de disque persistant sur ce plan) |
 | Push → auto-déploiement | activé (`autoDeploy: true`) : chaque push sur la branche choisie déploie |
 
 **Flux de travail recommandé :**
@@ -193,12 +202,21 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 
 ## 9. Coût & alternative 100 % gratuite
 
+Règle de base Render (vérifiée sur [render.com/pricing](https://render.com/pricing)
+et [docs.render.com/free](https://render.com/docs/free) le **2026-09-14**) :
+**seule la machine de 512 Mo est gratuite** (`plan: free` = 0,1 CPU / 512 Mo).
+Dès qu'on monte en CPU/RAM, c'est payant — et il n'existe **aucun** palier web à 1 Go :
+l'échelle des web services est `free` (512 Mo) → `0.5c-512mb` (512 Mo, 7 $) → `1c-2g`
+(2 Go, 25 $) → `2c-4g` (4 Go, 85 $). Le plan `0.5c-1g` (1 Go) n'existe qu'en **Postgres**
+(19 $/mois).
+
 | Solution | Coût | Notes |
 |---|---|---|
-| **Render × 2** (ce tuto) | ~16-24 $/mois | le plus simple ; le scraper peut tourner au mode « stop » la nuit pour économiser |
-| **Oracle Cloud Free Tier** | **0 $** | VM ARM (4 OCPU / 24 Go) *toujours* gratuite → `aiis-core` + Chromium sur la même VM ; `SCRAPER_SERVICE_URL` = ta VM ; tu peux même ajouter le site sur le port 80 avec Caddy/nginx (reverse proxy) |
-| **Fly.io** (scraper) + Render (core) | ~0-7 $/mois | Fly a un plan gratuit small ; Chromium y fonctionne |
-| **GitHub Pages** (site seul) + Render (API) | ~5-7 $/mois | le site statique est gratuit sur Pages ; mais il faut définir `API_BASE` dans `site/js/config.js` vers l'API (aujourd'hui le site et l'API sont censés être sur la même origine) |
+| **Render × 2 en `free`** (ce tuto, réglage actuel) | **0 $** | 512 Mo par service. ⚠️ **750 h d'instance gratuites par workspace et par mois** : un mois = ~730 h, donc **les 2 services ne peuvent pas rester éveillés 24/7 ensemble** (~1 460 h). En pratique ils s'endorment après 15 min sans requête (les heures endormies ne comptent pas) → OK pour un usage ponctuel, sinon Render suspend les services gratuits jusqu'au mois suivant |
+| **Render × 2 en `1c-2g`** | **50 $/mois** (2 × 25 $) | 2 Go + 1 vCPU chacun, always-on, disque persistant et scaling possibles. Étape intermédiaire : `0.5c-512mb` = 7 $/mois (512 Mo, <1 vCPU) — utile uniquement pour supprimer le spin-down, pas pour Chromium |
+| **Oracle Cloud Free Tier** | **0 $** | VM ARM (4 OCPU / 24 Go) *toujours* gratuite → `aiis-core` + Chromium sur la même VM, sans quota horaire ; `SCRAPER_SERVICE_URL` = ta VM ; tu peux même ajouter le site sur le port 80 avec Caddy/nginx (reverse proxy) |
+| **Fly.io** (scraper) | **≈ 2-3 $/mois — plus de tier gratuit** | ⚠️ Corrigé : Fly.io n'a **plus** d'offre gratuite pour les comptes créés après le 7 oct. 2024 (l'ancien quota « 3 machines shared-cpu-1x 256 Mo » ne vaut que pour les comptes antérieurs). Nouveau compte = court essai puis facturation à la seconde ; shared-cpu-1x 256 Mo ≈ 2 $/mois, et 256 Mo ne suffit de toute façon pas à Chromium |
+| **GitHub Pages** (site seul) + Render (API en `free`) | 0 $ (ou 7 $ sans spin-down) | le site statique est gratuit sur Pages ; mais il faut définir `API_BASE` dans `site/js/config.js` vers l'API (aujourd'hui le site et l'API sont censés être sur la même origine) |
 
 ---
 
@@ -207,10 +225,11 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 | Symptôme | Cause probable | Correction |
 |---|---|---|
 | Site affiche « MODE DÉMO » au lieu de MISTRAL | `MISTRAL_API_KEY` absente/vide/mal collée | *Environment* → vérifier la clé (pas d'espaces) → **Manual Deploy** |
-| Réponses très lentes au 1er message | Instance froide de Render (~30-60 s au réveil) | Normal ; 2ᵉ requête rapide |
-| `aiis-core` 502 après déploiement | Crashe au boot | *Logs* : souvent `ModuleNotFoundError` → vérifier que le commit a bien `requirements.txt` ; ou mémoire insuffisante → plan plus haut |
+| Réponses très lentes au 1er message | Plan `free` : l'instance s'est endormie (15 min sans requête) → ~1 min de réveil | Normal ; la 2ᵉ requête est rapide. Pour supprimer le réveil : plan `0.5c-512mb` (7 $) ou `1c-2g` (25 $) |
+| Site/scraper muet en fin de mois, puis retour au 1er du mois | Quota **750 h d'instance gratuites** du workspace épuisé (2 services toujours éveillés ≈ 1 460 h) | Laisser les services s'endormir (pas de trafic permanent), ne garder qu'un seul service en `free`, ou passer un service en payant |
+| `aiis-core` 502 après déploiement | Crashe au boot | *Logs* : souvent `ModuleNotFoundError` → vérifier que le commit a bien `requirements.txt` ; ou OOM en 512 Mo (plan `free`) → `1c-2g` (25 $/mois) |
 | Build du scraper échoue | Étape `playwright install chromium` | Relire *Logs* ; relancer le déploiement (souvent transitoire) ; vérifier que le Dockerfile est bien dans `services/scraper/` |
-| Scraper 502 / OOM (code 137) | Chromium dépasse les 2 Go sur une page lourde | Réduire `max_chars`/`wait_ms` côté appel ; plan `2c-4g` (4 Go) pour le scraper ; `ALLOWED_DOMAINS` pour limiter |
+| Scraper 502 / OOM (code 137) | Chromium dépasse les **512 Mo** du plan `free` sur une page lourde (risque assumé du scraper à 0 $) | Réduire `max_chars`/`wait_ms` côté appel ; `ALLOWED_DOMAINS` pour limiter ; si l'OOM persiste → `1c-2g` (2 Go, 25 $/mois) pour le scraper, ou Oracle Cloud Free Tier (0 $) |
 | `POST /api/research/scrape` renvoie « SCRAPER_SERVICE_URL non configuré » | Variable vide dans `aiis-core` | §4 |
 | Colab n'arrive pas à pousser les résultats | `MAIN_SITE_URL` vide ou http (Colab exige https pour certains domaines) | Mettre l'URL `https://…onrender.com` dans la cellule de config du notebook |
 | Render ne voit pas le repo | Repo privé non autorisé | Reconnecter GitHub dans Render en cochant *Private repositories* |
@@ -221,6 +240,7 @@ Le projet tourne en JSON local sans rien configurer. Pour passer sur Supabase :
 ## 11. Checklist finale
 
 - [ ] Blueprint créé (2 services : `aiis-core`, `aiis-scraper`)
+- [ ] Les 2 services sont bien sur le plan **`free`** (512 Mo, 0 $) — *Settings → Instance Type*
 - [ ] `MISTRAL_API_KEY` (+ fallbacks optionnels) renseignés
 - [ ] Scraper live → `/health` OK
 - [ ] `SCRAPER_SERVICE_URL` + `MAIN_SITE_URL` dans `aiis-core` → redéploié

@@ -20,10 +20,16 @@ automatiquement. Il ne reste qu'à renseigner les env vars proposées à la cré
 3. **Build & Run** : détection automatique via le `Dockerfile`
    (ou manuellement : Build `pip install -r requirements.txt && playwright install --with-deps chromium`,
    Start `uvicorn main:app --host 0.0.0.0 --port $PORT`).
-4. **Plan** : `1c-2g` (1 vCPU / 2 Go RAM) — Chromium a besoin de marge.
-   > Note budget : Render a supprimé le plan web gratuit ; 1c-2g ≈ 8-12 $/mois.
-   > Alternatives 100 % gratuites : **Oracle Cloud Free Tier** (VM ARM, Chromium tourne très bien)
-   > ou **Fly.io** (plan gratuit, machine de 256-512 Mo).
+4. **Plan** : `free` (512 Mo RAM) — c'est **la seule machine gratuite de Render**
+   et c'est le réglage du `render.yaml`.
+   > Note budget (vérifiée le 2026-09-14 sur [render.com/pricing](https://render.com/pricing)) :
+   > le plan web gratuit existe toujours, mais **uniquement en 512 Mo**. Tout le reste est
+   > payant : `0.5c-512mb` 7 $/mois, `1c-2g` (1 vCPU / 2 Go) **25 $/mois**, `2c-4g` 85 $/mois.
+   > ⚠️ 512 Mo est tendu pour Chromium → risque d'OOM (code 137) sur une page lourde :
+   > garder `max_chars`/`wait_ms` modestes. Si l'OOM persiste, deux issues :
+   > **Oracle Cloud Free Tier** (VM ARM gratuite, Chromium y tourne à l'aise) ou
+   > `1c-2g` (25 $/mois). ~~Fly.io~~ n'est plus une option gratuite : plus aucun tier
+   > gratuit pour les comptes créés après le 7 oct. 2024 (~2 $/mois pour 256 Mo, insuffisant).
 5. **Env vars** :
    - `ALLOWED_DOMAINS` (optionnel) : whitelist, ex. `wikipedia.org,wikimedia.org,example.com`.
 
