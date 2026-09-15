@@ -103,14 +103,31 @@ validés par les handlers, aucune skill n'exécute de code arbitraire.
 
 ## 5. Multi-fournisseurs
 
-`core/ai/providers.py` : chaîne construite à partir de `.env` —
-**Mistral** (priorité, `mistral-small-latest`) → **Gemini** → **Groq** → **OpenRouter** →
-**demo-local** (déterministe, toujours disponible).
+`core/ai/providers.py` (+ le catalogue `core/ai/limits.py`) : chaîne construite à
+partir de `.env` — **Mistral** (priorité, `ministral-8b-latest` puis
+`mistral-small-latest`, `mistral-large-2411`, `ministral-3b-latest`) → **Gemini** →
+**Groq** → **OpenRouter** → **NVIDIA NIM** (optionnel) → **demo-local**
+(déterministe, toujours disponible).
 
 Tous les providers cloud passent par le protocole OpenAI-compatible
-(`chat/completions` + `tools`) → un seul client, bascule facile, et le
-test de connexion d'un provider se fait avec un ping de 1 token avant la vraie
-conversation (le premier provider échouant bascule automatiquement).
+(`chat/completions` + `tools`) → un seul client, bascule facile.
+
+Gestion des tiers gratuits (chiffres et sources dans [FREE-TIERS.md](FREE-TIERS.md)) :
+
+| Mécanisme | Pourquoi |
+|---|---|
+| **Throttle en amont** (intervalle minimal déduit du débit publié) | la rafale crée le 429 ; sur OpenRouter les requêtes refusées comptent dans le quota du jour |
+| **Rotation de modèles dans le même provider** | les quotas gratuits sont souvent séparés par modèle (pool isolé pour `mistral-large-2411`) |
+| **Aucun retry sur 429** (on tourne tout de suite) | mitrailler un modèle en 429 brûle du quota pour rien |
+| **Repli en cascade** (`chat_with_failover`) | un 429 Mistral ne bascule plus le site en démo si une clé Groq/Gemini valide existe |
+| **Disjoncteur par moteur** (`HealthRegistry`) | repos calé sur l'annonce de l'API : `Retry-After`, `x-ratelimit-reset-*`, fenêtre du jour (minuit Pacifique pour Google), mois (1er), ou 1 h pour une erreur de configuration |
+| **Classification des erreurs** (`classify_failure`) | 401/403/404/402 = configuration (rien d'attendre, message actionnable) ; 429 = quota ; 5xx/réseau = passager ; **200 + corps d'erreur** (OpenRouter) = échec à replier |
+| **`RETIRED_MODELS`** | un ID mort devient « modèle retiré le JJ/MM → remplacement conseillé » au lieu d'un 429 trompeur |
+| **Visibilité** | `/api/status` (état, repos restant, modèle, en-têtes de quota), `warnings`/`attempts`/`provider_retry_in_human` dans `/api/chat`, `POST /api/providers/retest` |
+
+Le test de connexion (ping de 1 token) n'est plus systématique à chaque message :
+il coûte un appel sur des tiers à 50 req/jour. Il sert au re-test forcé
+(`/api/providers/retest`) et au premier choix de moteur.
 
 Clés (toutes optionnelles, offres gratuites) :
 - Mistral « La Plateforme » : `MISTRAL_API_KEY`

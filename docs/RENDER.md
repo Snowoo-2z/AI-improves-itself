@@ -74,7 +74,14 @@ Où récupérer les clés :
 - **Mistral** : [console.mistral.ai](https://console.mistral.ai) → *La Plateforme* (gratuit) → *My Keys* → *Create a new API Key*. Le modèle par défaut `mistral-small-latest` est déjà configuré ; pour changer : variable `MISTRAL_MODEL`.
 - **Gemini** : [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → *Create API key*.
 - **Groq** : [console.groq.com/keys](https://console.groq.com/keys).
-- **OpenRouter** : [openrouter.ai/keys](https://openrouter.ai/keys) (modèle par défaut gratuit : `meta-llama/llama-3.3-70b-instruct:free`).
+- **OpenRouter** : [openrouter.ai/keys](https://openrouter.ai/keys) (réglage par défaut : `openrouter/free`, l'auto-routeur officiel qui choisit un modèle gratuit compatible avec le tool calling — la liste des `:free` tourne en permanence, ne pas coder un ID en dur).
+- **NVIDIA NIM** (5ᵉ secours optionnel) : [build.nvidia.com](https://build.nvidia.com/) → `NVIDIA_API_KEY`.
+
+> ⚠️ Les IDs de modèles gratuits meurent vite (Groq a coupé `llama-3.3-70b-versatile` le
+> 16/08/2026, Mistral a retiré Medium 3/3.1 le 31/08/2026 et la ligne Magistral le
+> 31/07/2026). Avant chaque déploiement, comparer tes `*_MODEL` avec
+> [docs/FREE-TIERS.md](FREE-TIERS.md) — le cœur affiche désormais un message explicite
+> (« modèle retiré → remplacement conseillé ») au lieu d'un 429 trompeur.
 
 ### Service `aiis-scraper` (Chromium)
 

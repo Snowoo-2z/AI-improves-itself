@@ -35,8 +35,9 @@ AI-improves-itself/
 ├── services/scraper/         # web service Chromium (Playwright) — Render `free` 512 Mo (2 Go = 25 $/mois)
 ├── colab/                    # notebook + script exécuté dans Google Colab (tâches de recherche)
 ├── supabase/schema.sql       # base de données (phase 2, schéma complet prêt)
+├── tests/                    # suite sans réseau (bouchons httpx) : repli, 429, quotas, modèles retirés
 ├── render.yaml               # blueprint Render : 2 services créés en one-click
-└── docs/ARCHITECTURE.md      # architecture détaillée + règles de sécurité
+└── docs/                     # ARCHITECTURE.md · FREE-TIERS.md (offres gratuites vérifiées) · RENDER.md
 ```
 
 ## 🧬 Le cœur du concept : comment l'IA modifie-t-elle l'ensemble ?
@@ -70,12 +71,17 @@ Sans `.env` : le serveur démarre en **mode démo local** (moteur déterministe,
 toute la boucle d'auto-amélioration). Avec `MISTRAL_API_KEY` : le vrai moteur Mistral prend le
 relais (les autres clés = fallback automatique).
 
-> 💡 **Tier gratuit Mistral** : ~1 requête/seconde et fenêtres de quota glissantes (~1 min).
-> Le cœur gère les 429 tout seul (pause entre appels, retry automatique, repos ~1 min puis
-> re-test de la chaîne). Si tu vois le mode démo avec une erreur 429 : quota de la fenêtre
-> épuisé — ça reprend automatiquement, ou vérifie [Admin Console → Limits](https://admin.mistral.ai/plateforme/limits).
-> Pour un fallback « vrai moteur » au lieu du démo, ajoute une clé **Groq** (la plus simple :
-> sans carte, ~30 req/min) ou Gemini/OpenRouter dans `.env`.
+> 💡 **Tiers gratuits — l'état vérifié (2026-09-15) est dans
+> [docs/FREE-TIERS.md](docs/FREE-TIERS.md)** : limites réelles par fournisseur, IDs de
+> modèles vivants **et retirés**, sources (docs officielles + retours Reddit).
+> En bref : Mistral = ~1 req/s globale par clé + pool partagé de 50 000 tokens/min et
+> 4 M tokens/mois (d'où le **Ministral 8B essayé en premier** : même pool que Small 4,
+> mais ~10× moins de tokens par réponse) ; Groq = 200 000 tokens/**jour** sur
+> gpt-oss-120b ; Gemini = 1 500 req/jour remis à minuit heure du Pacifique ;
+> OpenRouter = 20 req/min et 50 req/jour (les 429 comptent dans le quota !).
+> Le cœur gère tout ça seul : throttle en amont, rotation de modèles, repli en cascade
+> vers le moteur suivant, et repos par moteur calé sur ce que l'API annonce
+> (`Retry-After`, fenêtre du jour, mois, ou erreur de configuration à corriger dans `.env`).
 
 ## 🔌 Brancher le reste
 
@@ -101,6 +107,8 @@ relais (les autres clés = fallback automatique).
 
 - [x] Monorepo + site statique (chat, /prompt, /data, /colab, /request, /contributeur)
 - [x] Cœur IA multi-fournisseurs (Mistral prioritaire) + mode démo de la boucle d'auto-amélioration
+- [x] Repli en cascade + disjoncteur par moteur (429/quota journalier/mensuel/modèle retiré/réseau)
+- [x] Catalogue des offres gratuites vérifié ([docs/FREE-TIERS.md](docs/FREE-TIERS.md)) + suite de tests
 - [x] Prompt système versionné + garde-fous mots-clés + auto-modification
 - [x] Skills (search, modify_prompt, request_to_dev, add_research_task, …)
 - [x] Service Chromium (Docker, prêt à déployer) + notebook Colab
