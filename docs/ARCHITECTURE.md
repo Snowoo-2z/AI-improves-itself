@@ -149,9 +149,11 @@ servait plus, la recherche s'exécute uniquement via le notebook Colab.
 
 | Exécutant | Tâches | Déploiement | Points forts |
 |---|---|---|---|
-| **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
+| **Colab** (`colab/`, v2) | `search` (multi-moteurs sans clé : DDG HTML → DDG lite → Wikipédia, avec extraits), `deep` (search + lecture auto des meilleures pages), `fetch` (titre + texte, robots.txt honoré), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
 
-Flux : IA → tâche `pending` → Colab → `done` + `research_results` → l'IA lit via
+Flux : IA → tâche `pending` → Colab (réveil serveur, fusion monotone des files,
+exécution, résumé local optionnel par clé API, push idempotent avec retry,
+attente du bilan d'étude) → `done` + `research_results` → l'IA lit via
 `list_research_results` → décide (étude, mise à jour de la base).
 
 **Étude des résultats (sur le site)** — `core/research/service.py` :

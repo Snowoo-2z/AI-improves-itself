@@ -79,14 +79,16 @@ SKILLS: list[dict] = [
         "id": "add_research_task",
         "name": "Programmer une tâche de recherche web",
         "description": (
-            "Ajoute une tâche dans la file /colab : kind='fetch' + URL, ou "
-            "kind='search' + requête. Le notebook Colab (colab/) l'exécute de façon "
-            "asynchrone ; les résultats reviennent via list_research_results."
+            "Ajoute une tâche dans la file /colab : kind='fetch' + URL, "
+            "kind='search' + requête (titres + extraits), ou kind='deep' + sujet "
+            "(recherche + lecture auto des meilleures pages — idéal pour un état "
+            "de l'art ou une question précise). Le notebook Colab (colab/) l'exécute "
+            "de façon asynchrone ; les résultats reviennent via list_research_results."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "kind": {"type": "string", "enum": ["search", "fetch"]},
+                "kind": {"type": "string", "enum": ["search", "fetch", "deep"]},
                 "target": {"type": "string", "description": "URL (fetch) ou requête (search)."},
                 "reason": {"type": "string", "description": "Pourquoi l'IA a besoin de cette info."},
             },

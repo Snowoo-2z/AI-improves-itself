@@ -29,8 +29,8 @@ MIN_CONFIDENCE = 0.55
 
 
 def create_task(kind: str, target: str, reason: str = "", by: str = "human") -> dict:
-    if kind not in ("search", "fetch", "note"):
-        raise ValueError("kind doit être 'search', 'fetch' ou 'note'")
+    if kind not in ("search", "fetch", "note", "deep"):
+        raise ValueError("kind doit être 'search', 'fetch', 'note' ou 'deep'")
     if not target:
         raise ValueError("target est requis")
     s = store_module.get_store()
@@ -237,12 +237,36 @@ def study_result(result: dict, *, force: bool = False) -> dict:
     kind = result.get("kind", "note")
     data = result.get("data") or {}
 
-    # Matière première lisable selon le kind (bornée).
+    # Matière première lisable selon le kind (bornée). Depuis Colab v2, les
+    # search/deep embarquent snippets (+ texte des pages lues) : on les donne
+    # à l'IA, sinon elle structurerait sur des titres seuls.
     if kind == "search":
-        items = data.get("results") or []
-        raw = _clip("\n".join(
-            f"- {it.get('title', '?')} ({it.get('url', '')})" for it in items if isinstance(it, dict)
-        ))
+        lines = []
+        for it in data.get("results") or []:
+            if not isinstance(it, dict):
+                continue
+            line = f"- {it.get('title', '?')} ({it.get('url', '')})"
+            if it.get("snippet"):
+                line += f" — {it['snippet']}"
+            if it.get("text"):
+                line += f"\n  contenu : {str(it['text'])[:900]}"
+            lines.append(line)
+        raw = _clip("\n".join(lines))
+    elif kind == "deep":
+        chunks = []
+        summary = data.get("summary")
+        if isinstance(summary, dict) and summary.get("summary"):
+            chunks.append(f"Résumé préparé par Colab : {summary['summary']}")
+        for it in (data.get("results") or [])[:6]:
+            if not isinstance(it, dict):
+                continue
+            line = f"- {it.get('title', '?')} ({it.get('url', '')})"
+            if it.get("snippet"):
+                line += f" — {it['snippet']}"
+            if it.get("text"):
+                line += f"\n  contenu : {str(it['text'])[:900]}"
+            chunks.append(line)
+        raw = _clip("\n".join(chunks))
     elif kind == "fetch":
         raw = _clip(str(data.get("text", "") or data.get("title", "") or ""))
     else:
@@ -252,6 +276,11 @@ def study_result(result: dict, *, force: bool = False) -> dict:
         return {"status": "skipped", "reason": "résultat brut vide"}
 
     url = str(data.get("url", "") or "").strip()
+    if kind == "deep" and not url:  # deep : l'URL vit dans les résultats
+        for it in data.get("results") or []:
+            if isinstance(it, dict) and it.get("url"):
+                url = str(it["url"])
+                break
     meta = (
         f"kind={kind}\n"
         + (f"url={url}\n" if url else "")

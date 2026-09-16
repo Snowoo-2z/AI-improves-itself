@@ -1,9 +1,9 @@
 {
   "id": "recherche",
   "scope": "recherche",
-  "version": 2,
+  "version": 3,
   "updated_by": "human",
-  "updated_at": 1789568231.7277606,
+  "updated_at": 1789569977.7546468,
   "keywords": [
     "cherche sur le web",
     "scrape",
@@ -15,7 +15,7 @@
     "actualités",
     "veille"
   ],
-  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, ou kind=\"search\" + requête de recherche.\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
+  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
   "history": [
     {
       "version": 1,
@@ -24,6 +24,14 @@
       "trigger": "manuel",
       "author": "human",
       "at": 1789568231.727759
+    },
+    {
+      "version": 2,
+      "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, ou kind=\"search\" + requête de recherche.\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
+      "reason": "Nouveau kind deep : recherche + lecture auto des meilleures pages (Colab v2).",
+      "trigger": "manuel",
+      "author": "human",
+      "at": 1789569977.7546446
     }
   ]
 }

@@ -135,7 +135,7 @@ class RequestItem(BaseModel):
 
 
 class ResearchTask(BaseModel):
-    kind: str = "search"  # search | fetch | note
+    kind: str = "search"  # search | fetch | note | deep
     target: str
     reason: str = ""
     by: str = "human"
@@ -366,8 +366,15 @@ def research_task_mark(task_id: str, payload: dict) -> dict:
 
 
 @app.get("/api/research/results")
-def research_results() -> dict:
+def research_results(task_id: str | None = None) -> dict:
+    """Résultats de recherche, optionnellement filtrés par tâche.
+
+    `?task_id=…` sert au notebook Colab v2 (déduplication des pushs + attente
+    ciblée des bilans d'étude). Sans filtre : comportement v1 inchangé.
+    """
     items = store_module.get_store().list("research_results")
+    if task_id:
+        items = [r for r in items if str(r.get("task_id")) == task_id]
     return {"results": sorted(items, key=lambda r: str(r.get("created_at", "")), reverse=True)}
 
 
