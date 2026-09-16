@@ -87,6 +87,21 @@ old_chat = chat_module.chat_with_failover
 try:
     store_module.DATA_DIR = tempfile.mkdtemp(prefix="search-guardrail-")
     store_module.reset_store_cache()
+    state = chat_module._build_state([{"role": "user", "content": "Compare ces recherches."}])
+    parallel = ProviderResult(
+        content="",
+        tool_calls=[
+            tool_call("modèle OpenAI", "p1"),
+            tool_call("modèle GPT", "p2"),
+        ],
+        provider="fake",
+    )
+    chat_module._run_tool_turn(state, parallel)
+    parallel_events = [e for e in state["events"] if e.get("type") == "tool"]
+    check(
+        "deux recherches de lecture seule sont exécutées dans la même réponse",
+        len(parallel_events) == 2 and not any(e.get("guardrail") for e in parallel_events),
+    )
     with mock.patch.object(chat_module, "chat_with_failover", side_effect=fake_failover):
         out = chat_module.handle_chat([{"role": "user", "content": "Quel est le dernier modèle OpenAI ?"}])
 finally:
@@ -102,6 +117,31 @@ check(
     len(calls) >= 2
     and not any((t.get("function") or {}).get("name") == "search_knowledge" for t in (calls[-1] or [])),
 )
+
+print("[3] Trop de tours de lecture force une synthèse sans nouvel outil")
+force_queue = [
+    ProviderResult(content="", tool_calls=[tool_call(f"f{i}", f"requête {i}")], provider="fake")
+    for i in range(4)
+]
+force_queue.append(ProviderResult(content="Synthèse forcée.", provider="fake"))
+old_data_dir = store_module.DATA_DIR
+old_chat = chat_module.chat_with_failover
+try:
+    store_module.DATA_DIR = tempfile.mkdtemp(prefix="search-force-")
+    store_module.reset_store_cache()
+
+    def force_failover(messages, tools, **kwargs):  # noqa: ANN001, ANN003
+        return FailoverOutcome(force_queue.pop(0), SimpleNamespace(name="fake"), [], [])
+
+    with mock.patch.object(chat_module, "chat_with_failover", side_effect=force_failover):
+        forced = chat_module.handle_chat([{"role": "user", "content": "Compare les sources."}])
+finally:
+    chat_module.chat_with_failover = old_chat
+    store_module.DATA_DIR = old_data_dir
+    store_module.reset_store_cache()
+
+check("une synthèse finale est délivrée après plusieurs recherches", forced["reply"] == "Synthèse forcée.")
+check("la synthèse forcée ne relance aucun outil", not forced["reply"].startswith("J'ai enchaîné trop"))
 
 print(f"RÉSULTAT : {len(PASSED)} OK, {len(FAILED)} en échec")
 if FAILED:

@@ -31,8 +31,9 @@ SKILLS: list[dict] = [
             "ATTENTION : si l'utilisateur demande le PLUS RÉCENT / DERNIER élément "
             "d'une catégorie, passe use_date=true pour un tri par date décroissante ; "
             "sans ça, la base renvoie dans l'ordre d'insertion (du plus ancien au plus récent). "
-            "Si aucune entrée ne correspond, ne répète pas cette skill avec des reformulations : "
-            "réponds honnêtement ou programme une recherche web."
+            "Tu peux regrouper jusqu'à 3 recherches de lecture seule dans une même réponse "
+            "pour comparer des requêtes, mais ne boucle pas sur cette skill à chaque tour si "
+            "aucune entrée ne correspond : réponds honnêtement ou programme une recherche web."
         ),
         "parameters": {
             "type": "object",

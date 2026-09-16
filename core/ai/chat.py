@@ -31,20 +31,20 @@ MAX_TOOL_ITERATIONS = 6
 #: coupé et l'excédent signalé au dev — l'IA ne peut plus saturer son propre
 #: historique et franchir la fenêtre de contexte (faille de debut).
 TOOL_ITERATION_HARD_LIMIT = 3
-#: Garde-fou « un seul outil à la fois » : une seule réponse du modèle peut
-#: contenir PLUSIEURS tool_calls (appels parallèles) ; exécuter toute la rafale
-#: multiplie les allers-retours LLM, grille le quota des tiers gratuits (429) et
-#: finit par saturer la boucle d'outils — le chat « bloque ». Seul le PREMIER
-#: appel de chaque réponse est exécuté ; les suivants reçoivent un refus
-#: explicite (le protocole OpenAI exige une réponse `tool` par `tool_call.id`,
-#: on ne peut pas simplement les ignorer) qui invite l'IA à rejouer l'outil SEUL
-#: au tour suivant. Les chaînes d'outils restent possibles, simplement
-#: séquentielles — ce que le prompt système impose déjà (voir prompts/main.json).
+#: Garde-fou des appels groupés : les lectures sans effet de bord peuvent être
+#: regroupées pour comparer plusieurs résultats. Les actions d'écriture ou de
+#: modification restent séquentielles afin d'éviter les rafales coûteuses et
+#: les effets de bord. Tout appel refusé reçoit quand même une réponse `tool`
+#: (le protocole OpenAI exige une réponse par `tool_call.id`).
 MAX_PARALLEL_TOOL_CALLS = 1
-#: Même en séquentiel, un modèle peut reformuler indéfiniment la même recherche
-#: après un résultat vide. Ces limites sont par message utilisateur, pas globales
-#: au processus : une nouvelle question repart avec un budget propre.
-MAX_TOOL_CALLS_PER_SKILL = 2
+#: Les recherches et lectures sont sans effet de bord : plusieurs peuvent être
+#: groupées dans une seule réponse pour comparer des formulations. Les outils
+#: d'écriture restent soumis à MAX_PARALLEL_TOOL_CALLS.
+MAX_PARALLEL_READ_ONLY_CALLS = 3
+READ_ONLY_PARALLEL_SKILLS = {"search_knowledge", "list_research_results"}
+#: Même en séquentiel, on borne une skill par message utilisateur. Cette limite
+#: évite une boucle LLM↔outil sans empêcher quelques recherches complémentaires.
+MAX_TOOL_CALLS_PER_SKILL = 3
 
 _DATE_RULE_MARKER = "[REGLE-AJOUTEE-PAR-IA]"
 _DATE_RULE = (
@@ -251,6 +251,20 @@ def _parallel_tool_refusal(tc: dict, position: int, kept: str) -> dict:
     }
 
 
+def _parallel_read_limit_refusal(tc: dict, position: int) -> dict:
+    """Refus lisible au-delà du nombre de lectures regroupables."""
+    name = _tool_name(tc)
+    return {
+        "ok": False,
+        "error": (
+            f"Lecture « {name} » refusée en position {position} : maximum "
+            f"{MAX_PARALLEL_READ_ONLY_CALLS} lectures dans une même réponse. "
+            "Synthétise les résultats déjà reçus avant de poursuivre."
+        ),
+        "guardrail": "parallel_read_limit",
+    }
+
+
 def _tool_name(tc: dict) -> str:
     function = tc.get("function") or {}
     return str(function.get("name") or "")
@@ -304,6 +318,40 @@ def _tool_loop_refusal(name: str, reason: str) -> dict:
     }
 
 
+def _read_only_result(result: ProviderResult) -> bool:
+    return bool(result.tool_calls) and all(
+        _tool_name(tc) in READ_ONLY_PARALLEL_SKILLS for tc in result.tool_calls
+    )
+
+
+def _read_only_stretch(state: dict, result: ProviderResult) -> bool:
+    return _read_only_result(result) and all(
+        event.get("skill") in READ_ONLY_PARALLEL_SKILLS
+        for event in state.get("events", [])
+        if event.get("type") == "tool"
+    )
+
+
+def _force_final_read_only_answer(state: dict) -> str | None:
+    """Demande une synthèse sans outils après trop de lectures successives.
+
+    Ce dernier appel ne peut plus relancer une recherche : même un modèle qui
+    ignore la consigne de regroupement doit donc terminer par du texte plutôt
+    que tomber sur le message « trop d'outils » affiché à l'utilisateur.
+    """
+    try:
+        outcome = chat_with_failover(state["messages"], [])
+    except Exception:  # noqa: BLE001 — le garde-fou final ne doit jamais bloquer
+        return None
+    _note_outcome(state, outcome)
+    result = outcome.result
+    state["provider"] = result.provider or outcome.provider.name
+    state["model"] = getattr(result, "model", "") or ""
+    if result.tool_calls:
+        return None
+    return result.content or "(réponse vide)"
+
+
 def _append_refused_tool(state: dict, tool_msgs: list[dict], tc: dict, refusal: dict) -> None:
     name = _tool_name(tc)
     args = _tool_args(tc)
@@ -334,18 +382,30 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
     avant les retours `tool`. Un outil refusé (`ok=False`) reçoit un retour
     d'échec plutôt que rien, pour que l'IA rebondisse au lieu de réitérer.
 
-    Garde-fou « un seul outil à la fois » : seuls les `MAX_PARALLEL_TOOL_CALLS`
-    premiers appels d'une réponse sont exécutés ; les appels groupés suivants
-    reçoivent un refus pédagogique (`_parallel_tool_refusal`) — chaque
-    `tool_call_id` a quand même sa réponse, le protocole reste valide.
+    Garde-fou : une réponse composée uniquement de lectures (`search_knowledge`
+    ou `list_research_results`) peut contenir jusqu'à
+    `MAX_PARALLEL_READ_ONLY_CALLS` appels. Dès qu'une action d'écriture est
+    présente, seuls les `MAX_PARALLEL_TOOL_CALLS` premiers appels sont exécutés ;
+    chaque appel refusé reçoit tout de même une réponse `tool`, protocole
+    OpenAI oblige.
     """
     tool_calls = list(result.tool_calls or [])
     kept_name = _tool_name(tool_calls[0]) if tool_calls else ""
+    # Une rafale entièrement composée de lectures est sûre et utile pour
+    # comparer plusieurs requêtes. Dès qu'une écriture est mélangée, on revient
+    # à la règle stricte : une seule action d'état par réponse.
+    read_only_batch = bool(tool_calls) and all(
+        _tool_name(tc) in READ_ONLY_PARALLEL_SKILLS for tc in tool_calls
+    )
     tool_msgs: list[dict] = []
     for position, tc in enumerate(tool_calls, start=1):
         name = _tool_name(tc)
         args = _tool_args(tc)
-        if position > MAX_PARALLEL_TOOL_CALLS:
+        if read_only_batch and position > MAX_PARALLEL_READ_ONLY_CALLS:
+            refusal = _parallel_read_limit_refusal(tc, position)
+            _append_refused_tool(state, tool_msgs, tc, refusal)
+            continue
+        if not read_only_batch and position > MAX_PARALLEL_TOOL_CALLS:
             refusal = _parallel_tool_refusal(tc, position, kept_name)
             _append_refused_tool(state, tool_msgs, tc, refusal)
             continue
@@ -484,6 +544,16 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         if result.tool_calls:
             last_user_stretch += 1
             if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
+                if _read_only_stretch(state, result):
+                    forced_reply = _force_final_read_only_answer(state)
+                    if forced_reply is not None:
+                        extra = _announce_excess_iterations(
+                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
+                        )
+                        done = _finalize_done(state, forced_reply, history_n, extra)
+                        done.update({"type": "done", "streamed": True})
+                        yield done
+                        return
                 break
             _run_tool_turn(state, result)
             continue
@@ -611,6 +681,13 @@ def handle_chat(history: list[dict]) -> dict:
         if result.tool_calls:
             last_user_stretch += 1
             if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
+                if _read_only_stretch(state, result):
+                    forced_reply = _force_final_read_only_answer(state)
+                    if forced_reply is not None:
+                        extra = _announce_excess_iterations(
+                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
+                        )
+                        return _finalize_done(state, forced_reply, history_n, extra)
                 break
             _run_tool_turn(state, result)
             continue
