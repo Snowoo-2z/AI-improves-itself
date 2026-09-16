@@ -3,33 +3,40 @@
 > C'est la pièce du README : *« l'IA met par exemple "j'ai besoin de vérifier
 > tatata" et le script pour Colab se met à jour avec des tasks »*.
 
+## Principe : les tâches vivent sur le serveur, avec la base de données
+
+Le serveur (quel que soit son backend actif — local, GitHub ou Supabase) est la
+**seule source de vérité** des tâches. Le notebook Colab n'est qu'un **client de
+l'API** : il tire les tâches (`GET /api/research/tasks`), les exécute, et
+repousse statuts (`PATCH`) + résultats (`POST /api/research/results`). Plus
+aucun fichier de tâches ne transite via git.
+
 ## Mécanique
 
 ```
-IA (chat)  ──skill add_research_task──▶  API /api/research/tasks  (file de tâches)
-                                              │  ▲
+IA (chat)  ──skill add_research_task──▶  API /api/research/tasks  (file du serveur,
+                                          │  ▲                    stockée avec la base)
                 notebook Colab (main.ipynb) ──┘  │  push statuts (PATCH) + résultats (POST)
                                               ▼  │
                                         main.py v2 → results.json
-                                              │  ▲
+                                              │  ▲      (+ tasks_cache.json : cache local)
                                               │  └── attente du bilan d'étude serveur
                                               ▼
                     site /colab + IA (skill list_research_results)
 ```
 
-- `tasks.json` — le seed local de la file. Chaque tâche : `{id, kind, target,
-  reason, by, status}`. L'IA n'ajoute que des tâches ; elle n'exécute rien
-  elle-même. Kinds : `search` (requête), `deep` (recherche + lecture auto des
-  meilleures pages), `fetch` (URL), `note` (texte).
-- `main.py` — le script v2. Réveille le serveur, fusionne les tâches distantes
-  avec le fichier local, exécute les `pending` (recherche multi-moteurs sans
-  clé, fetch + extraction titre/texte, robots.txt honoré), résume
-  optionnellement par LLM (clé fournie à la main), pousse statuts + résultats,
-  puis attend le bilan de l'étude serveur.
+- `tasks.json` (ce dossier) — **seed de démo versionné** : 3 tâches d'exemple.
+  Il ne sert qu'à initialiser le cache local au premier run hors-ligne. Il
+  n'est jamais écrit par le script et jamais synchronisé.
+- `main.py` — le script v2. Réveille le serveur, rapatrie les tâches depuis
+  l'API, fusionne avec le cache local, exécute les `pending` (recherche
+  multi-moteurs sans clé, fetch + extraction titre/texte, robots.txt honoré),
+  résume optionnellement par LLM (clé fournie à la main), pousse statuts +
+  résultats, puis attend le bilan de l'étude serveur.
 - `main.ipynb` — le notebook : 1 cellule de config, 1 de diagnostic
   (pré-vol : backend, file fusionnée, test clé), 1 d'exécution, 1 de résultats.
-- `results.json` — les résultats locaux (gitignoré), avec flags `pushed` /
-  `study` pour les retries et l'affichage.
+- `tasks_cache.json` / `results.json` — cache local + résultats (gitignorés).
+  Chaque résultat porte `pushed` / `study` pour les retries et l'affichage.
 
 L'URL du site est **détectée automatiquement** : variable `MAIN_SITE_URL` →
 fichier local `colab/main_site_url.txt` (gitignoré) → défaut versionné
@@ -49,11 +56,11 @@ fichier local `colab/main_site_url.txt` (gitignoré) → défaut versionné
 
 ## Synchronisation avec le serveur (v2, robuste)
 
-- **Source de vérité = le serveur** quand il est joignable : `GET
-  /api/research/tasks` puis fusion avec `tasks.json` (par id). Le **statut le
-  plus avancé gagne** (`pending` < `processing` < `done`/`failed`) : une tâche
-  `done` ne ressuscite jamais en `pending` — ni par le seed GitHub (téléchargé
-  uniquement si aucun fichier local), ni par un pull distant en retard.
+- **Source de vérité = le serveur** : `GET /api/research/tasks` puis fusion
+  avec le cache local (par id). Le **statut le plus avancé gagne** (`pending` <
+  `processing` < `done`/`failed`) : une tâche `done` ne ressuscite jamais en
+  `pending` — ni par le seed de démo (chargé uniquement si aucun cache), ni par
+  un pull distant en retard.
 - **Render gratuit s'endort** (15 min sans requête, ~1 min au réveil) : le
   script attend le réveil (jusqu'à ~2 min) au lieu d'échouer en 20 s comme la v1.
 - **Push idempotent** : statuts (PATCH, 3 essais) + résultats (POST). Chaque
@@ -63,9 +70,9 @@ fichier local `colab/main_site_url.txt` (gitignoré) → défaut versionné
 - **Étude serveur suivie** : après le push, le script attend le bilan
   (structuration + vérification, ~30-60 s) et l'affiche ; sinon, recharge
   `/colab` dans 1 min — rien n'est perdu.
-- En local (pas d'URL), le script lit `tasks.json` directement. Si le serveur
-  écrit les tâches ailleurs (variable `RESEARCH_TASKS_PATH`), définissez la
-  même variable en lançant le script pour lire/écrire le même fichier.
+- En local (pas d'URL), le script travaille sur son cache seul (initialisé
+  depuis le seed). Pour partager un fichier avec un serveur local hors-ligne,
+  définissez la même valeur `RESEARCH_TASKS_PATH` des deux côtés (avancé).
 
 ## Rendre Colab plus intelligent
 
@@ -86,7 +93,7 @@ quand même les résultats après le push (2 appels serveur).
 
 Voir le tableau en fin de notebook (`main.ipynb`). Cas fréquents : URL du site
 fausse, DuckDuckGo bloqué (fallback Wikipédia automatique — normal), quota LLM
-atteint (le brut reste poussé), étude serveur pas encore prête (recharger
+atteint (le brut est quand même poussé), étude serveur pas encore prête (recharger
 `/colab` dans 1 min).
 
 ## Limites
@@ -95,7 +102,7 @@ atteint (le brut reste poussé), étude serveur pas encore prête (recharger
   simples (Wikipédia, blogs…). Les pages à rendu JS lourd donnent un texte vide
   (signalé dans le rapport).
 - Les sessions Colab sont limitées dans le temps ; les sauvegardes
-  incrémentales (`tasks.json`/`results.json` à jour après chaque tâche) + les
-  retries de push évitent les pertes.
+  incrémentales (`tasks_cache.json`/`results.json` à jour après chaque tâche) +
+  les retries de push évitent les pertes.
 - Volume raisonnable : 1 s entre deux fetchs, robots.txt honoré — c'est de la
   recherche ponctuelle, pas du crawl massif.

@@ -61,6 +61,11 @@ def check(label: str, condition: bool, detail: str = "") -> None:
 print("== 0. Version du script ==")
 check("COLAB_SCRIPT_VERSION >= 2", getattr(colab, "COLAB_SCRIPT_VERSION", 1) >= 2)
 check("chemins de test isolés", colab.TASKS_PATH.startswith(TMP) and colab.RESULTS_PATH.startswith(TMP))
+check("cache local par défaut = tasks_cache.json (le serveur possède les tâches)",
+      colab._resolve_json_path("", "tasks_cache.json").endswith("tasks_cache.json"))
+_seed = json.load(open(os.path.join(REPO_ROOT, "colab", "tasks.json"), encoding="utf-8"))
+check("colab/tasks.json reste un seed de démo versionné",
+      isinstance(_seed, list) and any(t.get("id") == "task-demo-1" for t in _seed))
 
 print("== 1. merge_tasks : le statut le plus avancé gagne (bug v1 corrigé) ==")
 m = colab.merge_tasks(

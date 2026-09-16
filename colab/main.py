@@ -6,9 +6,10 @@ Mécanique (v2) :
    des meilleures pages) | note (texte brut).
 2. Vous ouvrez le notebook dans Google Colab (ou lancez en local) :
    - le serveur est réveillé (le plan gratuit Render s'endort après 15 min),
-   - les tâches distantes sont rapatriées (GET /api/research/tasks) et
-     FUSIONNÉES avec tasks.json — le statut le plus avancé gagne, donc une
-     tâche `done` ne ressuscite jamais en `pending` (bug v1 corrigé),
+   - les tâches sont rapatriées depuis l'API (GET /api/research/tasks) : le
+     serveur, avec sa base de données, est la SEULE source de vérité. Elles
+     sont fusionnées avec le cache local (tasks_cache.json) ; le statut le
+     plus avancé gagne, donc une tâche `done` ne ressuscite jamais (bug v1 corrigé),
    - chaque tâche pending est exécutée (multi-moteurs : DuckDuckGo HTML →
      DuckDuckGo lite → Wikipédia ; fetch avec titre + robots.txt),
    - OPTIONNEL : avec une clé API fournie à la main (jamais sauvegardée ni
@@ -28,8 +29,8 @@ Exécution en local (hors Colab) :
 Variables d'environnement (le notebook les positionne pour vous) :
     MAIN_SITE_URL       URL du site (défaut : https://aiis-core.onrender.com).
                         Vide = mode local pur (ni pull ni push).
-    COLAB_BRANCH        branche GitHub pour le seed initial de tasks.json (défaut main).
-    RESEARCH_TASKS_PATH même variable que le serveur (fichier des tâches partagé).
+    COLAB_BRANCH        branche GitHub du seed de démo (cache initial hors-ligne, défaut main).
+    RESEARCH_TASKS_PATH fichier de cache partagé avec le serveur (avancé, hors-ligne uniquement).
     COLAB_RESULTS_PATH  fichier des résultats (défaut : colab/results.json).
     MAX_TASKS / FETCH_TOP / SUMMARIZE / COLAB_LLM_PROVIDER / COLAB_LLM_MODEL /
     COLAB_LLM_API_KEY / COLAB_LLM_BASE_URL : voir run_all() et llm_config_from_env().
@@ -72,11 +73,13 @@ def _resolve_json_path(env_value: str, default_name: str) -> str:
     return os.path.join(HERE, default_name)
 
 
-# RESEARCH_TASKS_PATH (optionnel) : même variable que le serveur, pour lire /
-# écrire LE MÊME fichier en exécution locale. En backend distant (GitHub /
-# Supabase sur Render), le fichier local ne sert que de cache : la source de
-# vérité est l'API (pull + merge à chaque run).
-TASKS_PATH = _resolve_json_path(os.environ.get("RESEARCH_TASKS_PATH", ""), "tasks.json")
+# Cache local des tâches. Principe : les tâches vivent sur le SERVEUR, avec la
+# base de données (le serveur est la seule source de vérité) ; ce fichier
+# (tasks_cache.json) ne sert que de cache — fusionné à chaque run, initialisé
+# depuis le seed de démo du repo. RESEARCH_TASKS_PATH (optionnel) permet de
+# partager un autre fichier avec le serveur en exécution locale hors-ligne
+# (même valeur des deux côtés).
+TASKS_PATH = _resolve_json_path(os.environ.get("RESEARCH_TASKS_PATH", ""), "tasks_cache.json")
 #: COLAB_RESULTS_PATH (optionnel, tests/CI) : déplace results.json ailleurs.
 RESULTS_PATH = _resolve_json_path(os.environ.get("COLAB_RESULTS_PATH", ""), "results.json")
 
@@ -986,8 +989,8 @@ def server_colab_url() -> str:
 
 # ------------------------------------------------------------ seed initial ---
 def _seed_tasks_from_github(branch: str | None = None) -> bool:
-    """Seed initial : télécharge tasks.json depuis GitHub UNIQUEMENT si aucun
-    fichier local n'existe (v1 l'écrasait à chaque run → statuts perdus)."""
+    """Cache initial : télécharge le seed de démo (colab/tasks.json du repo)
+    UNIQUEMENT si aucun cache local n'existe (v1 écrasait à chaque run)."""
     if os.path.exists(TASKS_PATH):
         return False
     branch = branch or os.environ.get("COLAB_BRANCH", "") or DEFAULT_BRANCH
@@ -996,13 +999,13 @@ def _seed_tasks_from_github(branch: str | None = None) -> bool:
         _status, text, _final = _http_get(url, timeout=25, retries=1)
         tasks = json.loads(text)
         if not isinstance(tasks, list):
-            print("! seed tasks.json : contenu inattendu — démarrage avec 0 tâche.")
+            print("! seed tasks.json : contenu inattendu — cache vide.")
             return False
         _write(TASKS_PATH, tasks)
-        print(f"↓ tasks.json initialisé depuis GitHub ({branch}, {len(tasks)} tâche(s))")
+        print(f"↓ cache initialisé depuis le seed GitHub ({branch}, {len(tasks)} tâche(s) de démo)")
         return True
     except Exception as exc:  # noqa: BLE001
-        print(f"! seed tasks.json impossible ({str(exc)[:140]}) — démarrage avec 0 tâche.")
+        print(f"! seed GitHub impossible ({str(exc)[:140]}) — cache vide.")
         return False
 
 
@@ -1056,7 +1059,7 @@ def preflight(llm_cfg: dict | None = None, branch: str | None = None, quiet: boo
                           "by": t.get("by"), "status": t.get("status")} for t in pending]
     report["unpushed_results"] = len(select_unpushed(_read(RESULTS_PATH, [])))
     if not quiet:
-        print(f"📥 {len(local)} tâche(s) locale(s), {len(remote)} distante(s) → "
+        print(f"📥 {len(local)} en cache local, {len(remote)} distante(s) → "
               f"{len(pending)} pending après fusion")
         for t in report["pending"][:10]:
             print(f"   • [{t['kind']}] {t['target']} (par {t['by']}, {t['status']})")
@@ -1114,7 +1117,7 @@ def run_all(
         ok, msg = wake_server()
         print(("✅ " if ok else "⚠️ ") + msg)
         remote = pull_tasks()
-        print(f"📥 {len(tasks)} tâche(s) locale(s), {len(remote)} distante(s)")
+        print(f"📥 {len(tasks)} en cache local, {len(remote)} distante(s) (source de vérité : serveur)")
     tasks = merge_tasks(tasks, remote)
     _write(TASKS_PATH, tasks)
     results = _read(RESULTS_PATH, [])

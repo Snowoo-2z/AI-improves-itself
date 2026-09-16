@@ -16,6 +16,7 @@ core/data/dev_requests.json
 core/data/research_tasks.json
 core/data/research_results.json
 colab/results.json
+colab/tasks_cache.json
 colab/main_site_url.txt
 
 # OS / éditeurs

@@ -32,18 +32,51 @@ _lock = threading.Lock()
 
 
 # ---------------------------------------------------------------- Local ----
+_tasks_migration_done = False
+
+
 def _path(name: str) -> str:
     if name == "research_tasks":
-        # Source de vérité unique des tâches de recherche : c'est ce fichier que
-        # le notebook Colab télécharge et exécute (colab/main.py). L'emplacement
-        # est surchargeable via RESEARCH_TASKS_PATH (chemin absolu ou relatif au
-        # repo), utile pour pointer Colab vers un dossier précis.
+        # Les tâches vivent AVEC la base de données : le serveur (quel que soit
+        # son backend actif) est la seule source de vérité, et Colab n'est qu'un
+        # client de l'API. L'emplacement reste surchargeable via
+        # RESEARCH_TASKS_PATH (chemin absolu ou relatif au repo), utile pour
+        # partager le fichier avec un script Colab lancé en local hors-ligne.
         custom = (env("RESEARCH_TASKS_PATH") or "").strip()
         if custom:
             p = custom if os.path.isabs(custom) else os.path.join(REPO_ROOT, custom)
-            return p if p.endswith(".json") else os.path.join(p, "tasks.json")
-        return os.path.join(REPO_ROOT, "colab", "tasks.json")
+            return p if p.endswith(".json") else os.path.join(p, "research_tasks.json")
+        new = os.path.join(DATA_DIR, "research_tasks.json")
+        _migrate_legacy_tasks_once(new)
+        return new
     return os.path.join(DATA_DIR, f"{name}.json")
+
+
+def _migrate_legacy_tasks_once(new: str) -> None:
+    """Migration v1 -> v2 (une seule fois par processus) : les tâches vivaient
+    dans `colab/tasks.json` (fichier suivi par git) ; elles déménagent dans
+    `core/data/research_tasks.json`, avec le reste de la base locale.
+    Le fichier legacy est conservé tel quel (seed de démo, voir colab/)."""
+    global _tasks_migration_done
+    if _tasks_migration_done or os.path.exists(new):
+        return
+    _tasks_migration_done = True
+    legacy = os.path.join(REPO_ROOT, "colab", "tasks.json")
+    if not os.path.exists(legacy):
+        return
+    try:
+        with open(legacy, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, list):
+            return
+        os.makedirs(os.path.dirname(new), exist_ok=True)
+        with open(new, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        print(f"[store] taches migrees : colab/tasks.json -> core/data/research_tasks.json "
+              f"({len(data)} tache(s)).", file=sys.stderr)
+    except (ValueError, OSError) as exc:
+        print(f"[store] migration des taches impossible ({exc}) - demarrage avec 0 tache.",
+              file=sys.stderr)
 
 
 def _load(name: str, default):
@@ -109,15 +142,15 @@ class LocalStore:
 class GitHubStore:
     """Base JSON hébergée dans un repo GitHub privé (API Contents).
 
-    Un fichier par collection : {GITHUB_DIR}/{name}.json — sauf research_tasks,
-    qui vit dans `RESEARCH_TASKS_PATH` du repo (défaut `colab/tasks.json`,
-    même convention que le LocalStore, pour que le notebook Colab tombe sur le
-    même fichier). Toute tâche créée — par l'IA ou par un humain — est donc
-    synchronisée dans le repo de données à cet emplacement.
+    Un fichier par collection : {GITHUB_DIR}/{name}.json — y compris les tâches
+    (`{GITHUB_DIR}/research_tasks.json`, surchargeable via RESEARCH_TASKS_PATH).
+    L'ancien emplacement `colab/tasks.json` (v1) est toujours lu en fallback et
+    migré automatiquement à la prochaine écriture. Le notebook Colab ne lit plus
+    aucun fichier via git : il passe par l'API du serveur (source de vérité).
 
     Config (.env) : GITHUB_TOKEN (fine-grained PAT, Contents lecture+écriture
     sur ce seul repo), GITHUB_REPO (owner/repo), GITHUB_BRANCH (défaut main),
-    GITHUB_DIR (défaut data), RESEARCH_TASKS_PATH (défaut colab/tasks.json).
+    GITHUB_DIR (défaut data), RESEARCH_TASKS_PATH (défaut data/research_tasks.json).
     Guide complet : docs/GITHUB-BACKEND.md.
 
     Robustesse : lecture avec petit cache TTL (15 s, pour ne pas ralentir
@@ -151,11 +184,10 @@ class GitHubStore:
 
     def _path(self, name: str) -> str:
         if name == "research_tasks":
-            # Emplacement des tâches dans le repo de données : `research_tasks_path`
-            # est le chemin choisi par l'utilisateur (ex. "colab/tasks.json" ou
-            # "recherche/taches.json"), sinon `colab/tasks.json`. C'est CE fichier
-            # que le notebook Colab constate (les tâches créées par l'IA ou par un
-            # humain y sont écrites) — voir docs/GITHUB-BACKEND.md.
+            # Emplacement des tâches dans le repo de données : avec les autres
+            # collections (`{GITHUB_DIR}/research_tasks.json`), surchargeable via
+            # RESEARCH_TASKS_PATH (chemin explicite .json ou dossier). Voir
+            # docs/GITHUB-BACKEND.md §5 (l'ancien colab/tasks.json est migré auto).
             custom_path = (env("RESEARCH_TASKS_PATH") or "").strip().strip("/")
             if custom_path:
                 if custom_path.endswith(".json"):
@@ -163,8 +195,17 @@ class GitHubStore:
                 if "/" in custom_path:
                     return f"{custom_path.rstrip('/')}/research_tasks.json"
                 return f"{custom_path}/research_tasks.json"
-            return "colab/tasks.json"
+            return f"{self.dir}/research_tasks.json"
         return f"{self.dir}/{name}.json"
+
+    def _legacy_tasks_path(self) -> str | None:
+        """Ancien emplacement v1 des tâches (`colab/tasks.json`), lu en fallback
+        quand le nouveau fichier n'existe pas encore (migration transparente à
+        la prochaine écriture). Pas de fallback si un emplacement explicite
+        (RESEARCH_TASKS_PATH) est configuré."""
+        if (env("RESEARCH_TASKS_PATH") or "").strip():
+            return None
+        return "colab/tasks.json"
 
     def _url(self, path: str) -> str:
         return f"https://api.github.com/repos/{self.repo}/contents/{path}"
@@ -190,6 +231,21 @@ class GitHubStore:
         r = self._request("GET", self._url(self._path(name)),
                           headers=self._headers(), params={"ref": self.branch})
         if r.status_code == 404:
+            if name == "research_tasks":
+                legacy = self._legacy_tasks_path()
+                if legacy:
+                    lr = self._request("GET", self._url(legacy),
+                                       headers=self._headers(), params={"ref": self.branch})
+                    if lr.status_code == 200:
+                        try:
+                            data = self._decode(lr.json())
+                        except (ValueError, KeyError):
+                            data = []
+                        print(f"[store] taches lues depuis l'ancien {legacy} "
+                              f"(migration auto vers {self._path(name)} a la prochaine ecriture).",
+                              file=sys.stderr)
+                        self._shas[name] = None  # PUT sans sha -> crée le nouveau fichier
+                        return data if isinstance(data, list) else [], None
             self._shas[name] = None
             return [], None
         r.raise_for_status()

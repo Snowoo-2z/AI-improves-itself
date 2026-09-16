@@ -115,7 +115,7 @@ from core.store import _path  # noqa: E402
 resolved = _path("research_tasks")
 check("le chemin local suit RESEARCH_TASKS_PATH", "research/tasks.json" in resolved.replace("\\", "/"), resolved)
 os.environ.pop("RESEARCH_TASKS_PATH", None)
-check("défaut local = colab/tasks.json", _path("research_tasks").replace("\\", "/").endswith("colab/tasks.json"))
+check("défaut local = core/data/research_tasks.json (avec la base)", _path("research_tasks").replace("\\", "/").endswith("core/data/research_tasks.json"))
 import shutil  # noqa: E402
 
 shutil.rmtree(tmp, ignore_errors=True)
@@ -170,7 +170,41 @@ gs._path  # noqa: B018
 os.environ["RESEARCH_TASKS_PATH"] = "recherche"
 check("dossier seul → research_tasks.json", store_module.GitHubStore(client=httpx.Client(transport=httpx.MockTransport(fake.handler)))._path("research_tasks") == "recherche/research_tasks.json")
 os.environ.pop("RESEARCH_TASKS_PATH", None)
-check("défaut github = colab/tasks.json", store_module.GitHubStore(client=httpx.Client(transport=httpx.MockTransport(fake.handler)))._path("research_tasks") == "colab/tasks.json")
+check("défaut github = data/research_tasks.json (avec la base)", store_module.GitHubStore(client=httpx.Client(transport=httpx.MockTransport(fake.handler)))._path("research_tasks") == "data/research_tasks.json")
+
+print("== 7. Migration legacy colab/tasks.json (v1 -> v2) ==")
+# GitHub : nouveau fichier absent + legacy présent -> lu puis migré à l'écriture.
+os.environ["GITHUB_TOKEN"] = "ghp_test"
+os.environ["GITHUB_REPO"] = "octo/data-priv"
+os.environ.pop("RESEARCH_TASKS_PATH", None)
+fake7 = FakeGitHub()
+fake7.files["colab/tasks.json"] = (json.dumps([{"id": "legacy-1", "kind": "search", "target": "x", "status": "pending"}]), "sha0001")
+gs7 = store_module.GitHubStore(client=httpx.Client(transport=httpx.MockTransport(fake7.handler)))
+got = gs7.list("research_tasks")
+check("fallback legacy lu quand le nouveau fichier manque", len(got) == 1 and got[0]["id"] == "legacy-1", json.dumps(got)[:120])
+gs7.add("research_tasks", {"kind": "note", "target": "y", "status": "pending"})
+check("migré vers data/research_tasks.json à l'écriture", "data/research_tasks.json" in fake7.files)
+migrated = json.loads(fake7.files["data/research_tasks.json"][0])
+check("contenu legacy conservé + nouveau", len(migrated) == 2 and migrated[0]["id"] == "legacy-1")
+os.environ.pop("GITHUB_TOKEN", None)
+os.environ.pop("GITHUB_REPO", None)
+# Local : core/data/research_tasks.json absent + legacy présent -> copié.
+_new_tasks = os.path.join(REPO_ROOT, "core", "data", "research_tasks.json")
+_existed = os.path.exists(_new_tasks)
+_snap_tasks = open(_new_tasks, encoding="utf-8").read() if _existed else None
+try:
+    if _existed:
+        os.remove(_new_tasks)
+    store_module._tasks_migration_done = False  # rejoue la migration pour le test
+    resolved = _path("research_tasks")
+    check("migration locale crée core/data/research_tasks.json",
+          os.path.exists(resolved) and "task-demo-1" in open(resolved, encoding="utf-8").read(), resolved)
+finally:
+    if not _existed and os.path.exists(_new_tasks):
+        os.remove(_new_tasks)
+    elif _existed and _snap_tasks is not None:
+        with open(_new_tasks, "w", encoding="utf-8") as fh:
+            fh.write(_snap_tasks)
 
 os.environ.pop("GITHUB_TOKEN", None)
 os.environ.pop("GITHUB_REPO", None)

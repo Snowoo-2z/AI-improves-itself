@@ -110,9 +110,9 @@ check("update existant", upd is not None and upd["status"] == "done")
 check("update absent → None", s.update("dev_requests", "nope", {"a": 1}) is None)
 check("find", (s.find("dev_requests", title="deux") or {}).get("id") == item2["id"])
 
-print("== research_tasks → colab/tasks.json ==")
+print("== research_tasks → data/research_tasks.json (avec la base) ==")
 s.add("research_tasks", {"kind": "search", "target": "x"})
-check("tasks dans colab/tasks.json", "colab/tasks.json" in fake.files)
+check("tasks dans data/research_tasks.json", "data/research_tasks.json" in fake.files)
 
 print("== seed auto de knowledge ==")
 fake2 = FakeGitHub()
