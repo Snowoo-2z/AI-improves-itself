@@ -16,5 +16,14 @@
     "by": "ai",
     "status": "pending",
     "created_at": "2026-09-14T00:00:00Z"
+  },
+  {
+    "id": "task-demo-3",
+    "kind": "deep",
+    "target": "Mistral AI nouveautés 2026",
+    "reason": "Tâche de démonstration : recherche approfondie (titres + lecture auto des meilleures pages).",
+    "by": "ai",
+    "status": "pending",
+    "created_at": "2026-09-16T00:00:00Z"
   }
 ]

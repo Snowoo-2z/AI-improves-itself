@@ -28,7 +28,7 @@
       <p class="sub">
         Quand l'IA a besoin d'informations, elle programme des <b>tâches</b> (skill
         <code>add_research_task</code>). Le <b>notebook Colab</b> (script mis à jour par l'IA via ces tâches —
-        « j'ai besoin de vérifier X » → nouvelle tâche dans <code>colab/tasks.json</code>) les exécute, et les
+        « j'ai besoin de vérifier X » → nouvelle tâche dans la file du serveur) les exécute, et les
         résultats reviennent ici pour que l'IA les étudie. Chaque résultat est ensuite
         <b>structuré puis vérifié</b> par le site (2 appels IA, sans clé dans Colab) avant d'être
         inscrit dans la base de connaissances. Chaque tâche — créée par l'IA <em>ou</em> par un
@@ -59,7 +59,7 @@
           <h3>Ajouter une tâche (manuel)</h3>
           <form id="task-form">
             <div class="field"><label>Kind</label>
-              <select name="kind"><option value="search">search (requête)</option><option value="fetch">fetch (URL)</option><option value="note">note (texte)</option></select>
+              <select name="kind"><option value="search">search (requête)</option><option value="deep">deep (recherche + lecture auto)</option><option value="fetch">fetch (URL)</option><option value="note">note (texte)</option></select>
             </div>
             <div class="field"><label>Target (URL ou requête)</label><input name="target" required placeholder="https://… ou « agents IA 2026 »" /></div>
             <div class="field"><label>Pourquoi</label><textarea name="reason" placeholder="Contexte pour l'IA…"></textarea></div>
@@ -69,8 +69,9 @@
         <div class="card">
           <h3>Notebook Colab</h3>
           <div class="small muted" style="margin-bottom:10px">
-            Le script <code>colab/main.py</code> lit <code>tasks.json</code>, exécute les tâches
-            <code>pending</code>, écrit <code>results.json</code> et pousse les résultats au site.
+            Le script <code>colab/main.py</code> récupère les tâches depuis l'API du serveur
+            (source de vérité : la base de données), exécute les <code>pending</code>,
+            et repousse statuts + résultats au site.
           </div>
           <a class="btn ghost" href="/colab-notebook/main.ipynb" target="_blank">Ouvrir le notebook</a>
           <div class="small muted" style="margin-top:10px">

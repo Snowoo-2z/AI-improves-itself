@@ -7,12 +7,11 @@ dans l'onglet web de GitHub, gratuit.
 
 ``` 
 ton-repo-de-données-privé/
-├── data/
-│   ├── dev_requests.json      # /request
-│   ├── research_results.json  # résultats du notebook Colab
-│   └── knowledge.json         # base de connaissances (seedée auto au 1er appel)
-└── colab/
-    └── tasks.json             # tâches de recherche (le notebook Colab lit ce fichier)
+└── data/
+    ├── dev_requests.json      # /request
+    ├── research_results.json  # résultats du notebook Colab
+    ├── research_tasks.json    # tâches de recherche (file du serveur — Colab passe par l'API)
+    └── knowledge.json         # base de connaissances (seedée auto au 1er appel)
 ```
 
 ## 1. Créer le repo de données (2 min)
@@ -42,7 +41,7 @@ GITHUB_TOKEN=github_pat_...
 GITHUB_REPO=TON-COMPTE/ai-data-prive
 # GITHUB_BRANCH=main          # optionnel
 # GITHUB_DIR=data             # optionnel (dossier des *.json dans le repo)
-# RESEARCH_TASKS_PATH=colab/tasks.json   # optionnel (voir §5)
+# RESEARCH_TASKS_PATH=data/research_tasks.json   # optionnel (voir §5)
 ```
 
 Puis **redémarrer** le serveur (`python core/server.py` — le `.env` est lu au démarrage).
@@ -75,15 +74,21 @@ Toute tâche de recherche est écrite **où que l'API l'ait créée** :
 - via le formulaire de la page `/colab` → `POST /api/research/tasks` (auteur `human`).
 
 Les deux passent par le même `Store` : en backend GitHub, chaque création fait
-un **commit dans le repo de données** vers le chemin `RESEARCH_TASKS_PATH`
-(défaut `colab/tasks.json`), et les changements de statut (`pending` →
-`processing` → `done`/`failed`) sont aussi écrits. Le notebook Colab lit ce
-même fichier pour exécuter les tâches.
+un **commit dans le repo de données** vers `data/research_tasks.json` (défaut,
+avec les autres collections), et les changements de statut (`pending` →
+`processing` → `done`/`failed`) sont aussi écrits. Le notebook Colab récupère
+les tâches via l'API (`GET /api/research/tasks`) — le serveur est la seule
+source de vérité ; aucun fichier n'est lu via git.
+
+> **Migration v1 → v2** : les tâches vivaient dans `colab/tasks.json`. Si ce
+> fichier existe encore et que `data/research_tasks.json` manque, il est lu en
+> fallback puis migré automatiquement à la prochaine écriture (tu peux ensuite
+> supprimer l'ancien fichier).
 
 ### Changer le dossier
 
-Par défaut les tâches vivent dans `colab/tasks.json` (comme en local). Pour les
-ranger ailleurs dans le repo (ex. `recherche/taches.json`) :
+Par défaut les tâches vivent dans `data/research_tasks.json` (comme les autres
+collections). Pour les ranger ailleurs dans le repo (ex. `recherche/taches.json`) :
 
 ```bash
 RESEARCH_TASKS_PATH=recherche/taches.json
@@ -93,16 +98,17 @@ Règles d'interprétation du chemin :
 
 | `RESEARCH_TASKS_PATH` | fichier écrit dans le repo |
 |---|---|
-| `colab/tasks.json` | `colab/tasks.json` |
+| `data/research_tasks.json` | `data/research_tasks.json` |
 | `recherche/taches.json` | `recherche/taches.json` |
 | `recherche` (dossier) | `recherche/research_tasks.json` |
-| (vide) | `colab/tasks.json` (défaut) |
+| (vide) | `data/research_tasks.json` (défaut) |
 
-> En mode **local** (pas de GitHub), la même variable déplace aussi le fichier
-> `tasks.json` sur le disque (`RESEARCH_TASKS_PATH` relatif au repo ou chemin
-> absolu) — pratique pour pointer le script Colab vers un dossier précis.
-> ⚠️ Dans ce cas, passez la même valeur `RESEARCH_TASKS_PATH` au script Colab
-> (ou laissez `MAIN_SITE_URL` faire la fusion via l'API, ce qui reste le plus simple).
+> En mode **local** (pas de GitHub), les tâches vivent dans
+> `core/data/research_tasks.json`, avec le reste de la base (l'ancien
+> `colab/tasks.json` du repo est migré automatiquement au premier accès — il
+> reste ensuite un simple seed de démo). La même variable `RESEARCH_TASKS_PATH`
+> peut déplacer le fichier (relatif au repo ou absolu) pour partager un cache
+> avec un script Colab lancé hors-ligne (même valeur des deux côtés).
 
 ## Limites assumées
 

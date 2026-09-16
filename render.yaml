@@ -80,9 +80,9 @@ services:
       - key: GITHUB_REPO
         sync: false
       # --- Emplacement des tâches de recherche dans le repo de données --------
-      # Défaut : colab/tasks.json (le fichier lu par le notebook Colab).
-      # Mettre un autre chemin (ex. "colab/tasks.json" ou "recherche/taches.json")
-      # si tu ranges les tâches ailleurs dans le repo.
+      # Défaut : data/research_tasks.json (avec le reste de la base — le serveur
+      # est la source de vérité, Colab passe par l'API). Mettre un autre chemin
+      # (ex. "recherche/taches.json") si tu ranges les tâches ailleurs.
       - key: RESEARCH_TASKS_PATH
         sync: false
       # --- Supabase (alternative au backend GitHub ; tant que vides → voir STORE_BACKEND) ---

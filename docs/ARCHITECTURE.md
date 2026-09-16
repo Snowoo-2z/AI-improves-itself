@@ -142,16 +142,19 @@ Clés (toutes optionnelles, offres gratuites) :
 
 ## 6. Recherche web (1 exécutant, 1 file)
 
-File unique : `research_tasks` (Supabase, ou le backend GitHub — dans
-`colab/tasks.json` ou le chemin `RESEARCH_TASKS_PATH` — ou `colab/tasks.json`
-local). Le **scraper Chromium (`services/scraper/`) a été retiré** : il ne
+File unique : `research_tasks`, stockée AVEC la base de données (table
+`research_tasks` sur Supabase, `data/research_tasks.json` sur le backend GitHub,
+`core/data/research_tasks.json` en local — l'ancien `colab/tasks.json` est migré
+automatiquement). Le **scraper Chromium (`services/scraper/`) a été retiré** : il ne
 servait plus, la recherche s'exécute uniquement via le notebook Colab.
 
 | Exécutant | Tâches | Déploiement | Points forts |
 |---|---|---|---|
-| **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
+| **Colab** (`colab/`, v2) | `search` (multi-moteurs sans clé : DDG HTML → DDG lite → Wikipédia, avec extraits), `deep` (search + lecture auto des meilleures pages), `fetch` (titre + texte, robots.txt honoré), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
 
-Flux : IA → tâche `pending` → Colab → `done` + `research_results` → l'IA lit via
+Flux : IA → tâche `pending` → Colab (réveil serveur, fusion monotone des files,
+exécution, résumé local optionnel par clé API, push idempotent avec retry,
+attente du bilan d'étude) → `done` + `research_results` → l'IA lit via
 `list_research_results` → décide (étude, mise à jour de la base).
 
 **Étude des résultats (sur le site)** — `core/research/service.py` :
@@ -180,8 +183,8 @@ data-URL base64 (max 4 / 2 Mo, aucun stockage serveur) et les envoie dans le
 ## 7. Base de données
 
 - **Phase 1 (actuel)** : `LocalStore` (JSON dans `core/data/`, tâches dans
-  `colab/tasks.json`) — zéro config, `knowledge.json` seedée (Zelda, Mistral,
-  Supabase…).
+  `core/data/research_tasks.json`) — zéro config, `knowledge.json` seedée (Zelda,
+  Mistral, Supabase…).
 - **Backend GitHub** : `GitHubStore` (déjà codé) — un fichier JSON par collection
   dans un repo GitHub privé, activé par `GITHUB_TOKEN` + `GITHUB_REPO`. Les tâches
   de recherche y sont **synchronisées** (créées par l'IA ou par un humain), au

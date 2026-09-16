@@ -66,7 +66,7 @@ https://aiis-core.onrender.com/   ← site + chat IA + API (le produit)
 | `STORE_BACKEND` | `auto` (défaut — déjà dans le Blueprint) | non (forcer : `local` / `github` / `supabase`) |
 | `GITHUB_TOKEN` | token fine-grained → Contents Read+write sur le repo de données **uniquement** | **oui si backend GitHub** (§4) |
 | `GITHUB_REPO` | `TON-COMPTE/ton-repo-data-prive` | **oui si backend GitHub** (§4) |
-| `RESEARCH_TASKS_PATH` | chemin des tâches dans le repo de données (défaut `colab/tasks.json`) | non (voir §4) |
+| `RESEARCH_TASKS_PATH` | chemin des tâches dans le repo de données (défaut `data/research_tasks.json`) | non (voir §4) |
 | `SUPABASE_URL` | `https://xxxx.supabase.co` (alternative au backend GitHub) | non |
 | `SUPABASE_SERVICE_KEY` | `sb_…` (page projet → API keys → service_role) | non |
 | `MAIN_SITE_URL` | URL publique de `aiis-core` lui-même (visible après déploiement) | non (utilisée par le notebook Colab pour tirer/pousser tâches et résultats) |
@@ -127,8 +127,8 @@ Où récupérer les clés :
 3. Vérifier : `GET /api/status` → `"store_backend": "github"`. Ouvre une requête sur
    Request : un commit `data: dev_requests (…)` doit apparaître dans le repo de données.
 4. Les **tâches de recherche** (créées par l'IA ou le formulaire `/colab`) sont écrites
-   dans le repo à `RESEARCH_TASKS_PATH` (défaut `colab/tasks.json`) — c'est ce fichier
-   que le notebook Colab exécute.
+   dans le repo avec la base (`data/research_tasks.json` par défaut) — le notebook
+   Colab les récupère via l'API du serveur (source de vérité).
 
 ### Option B — Supabase (alternative)
 
@@ -154,16 +154,17 @@ Où récupérer les clés :
    rien à changer. Le script la détecte de toute façon automatiquement
    (env → `colab/main_site_url.txt` → défaut versionné).
 3. **Runtime → Run all** :
-   - le script **tire les tâches depuis l'API** (`GET /api/research/tasks`) et les
-     fusionne avec `tasks.json` local — c'est comme ça qu'il voit les tâches créées
-     via le chat sur Render (backend GitHub, plus de fichier local partagé) ;
+   - le script **tire les tâches depuis l'API** (`GET /api/research/tasks`, seule
+     source de vérité — elles vivent avec la base de données) et les fusionne avec
+     son cache local — c'est comme ça qu'il voit les tâches créées via le chat sur
+     Render (backend GitHub, aucun fichier partagé) ;
    - les tâches `pending` s'exécutent (recherche DuckDuckGo sans clé + fetch de pages simples) ;
    - statuts (`PATCH`) et résultats (`POST /api/research/results`) sont repoussés au site.
 4. Sur le site : `/colab.html` → les tâches passent `done`, les résultats apparaissent.
    Dans le chat : **« Quelles sont les dernières recherches ? »** (skill `list_research_results`).
 
 > ⏳ Les sessions Colab sont limitées dans le temps (RAM gratuite ~12 h max) :
-> le script sauvegarde de façon incrémentale (`tasks.json`/`results.json` mis à jour
+> le script sauvegarde de façon incrémentale (`tasks_cache.json`/`results.json` mis à jour
 > après chaque tâche) → rien n'est perdu en cas de coupure.
 > `MAIN_SITE_URL` est détectée automatiquement (défaut versionné
 > `https://aiis-core.onrender.com`) — inutile de la configurer, sauf pour pointer
