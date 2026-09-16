@@ -87,7 +87,9 @@ SKILLS: list[dict] = [
             "kind='search' + requête (titres + extraits), ou kind='deep' + sujet "
             "(recherche + lecture auto des meilleures pages — idéal pour un état "
             "de l'art ou une question précise). Le notebook Colab (colab/) l'exécute "
-            "de façon asynchrone ; les résultats reviennent via list_research_results."
+            "de façon asynchrone en arrière-plan. ATTENTION : les résultats ne sont pas "
+            "disponibles immédiatement dans ce tour ; après avoir programmé la tâche, "
+            "réponds à l'utilisateur avec tes connaissances actuelles en mentionnant la programmation."
         ),
         "parameters": {
             "type": "object",
@@ -102,7 +104,10 @@ SKILLS: list[dict] = [
     {
         "id": "list_research_results",
         "name": "Lire les derniers résultats de recherche",
-        "description": "Retourne les N derniers résultats de recherche (tâches exécutées par le notebook Colab).",
+        "description": (
+            "Retourne les N derniers résultats de recherche déjà exécutés par le notebook Colab. "
+            "Ne renvoie rien pour des tâches venant d'être créées (exécution asynchrone)."
+        ),
         "parameters": {
             "type": "object",
             "properties": {"limit": {"type": "integer", "description": "Nombre de résultats (défaut 5, max 20)."}},
@@ -305,7 +310,16 @@ def _h_add_research_task(args: dict) -> dict:
             "status": "pending",
         },
     )
-    return {"ok": True, "id": item.get("id"), "status": "pending"}
+    return {
+        "ok": True,
+        "id": item.get("id"),
+        "status": "pending",
+        "message": (
+            "Tâche enregistrée. L'exécution est asynchrone (Colab / worker) : "
+            "aucun résultat n'est disponible immédiatement dans ce tour. "
+            "Conclus et réponds à l'utilisateur avec tes connaissances actuelles."
+        ),
+    }
 
 
 def _h_list_research_results(args: dict) -> dict:
@@ -316,7 +330,12 @@ def _h_list_research_results(args: dict) -> dict:
         results = sorted(results, key=lambda r: str(r.get("created_at", "")), reverse=True)
     except Exception:
         pass
-    return {"results": results[: min(limit, 20)]}
+    top = results[: min(limit, 20)]
+    return {
+        "results": top,
+        "count": len(results),
+        "note": "aucun résultat disponible" if not top else f"{len(top)} résultat(s) disponible(s)",
+    }
 
 
 _SKILL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

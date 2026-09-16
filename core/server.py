@@ -119,6 +119,7 @@ def _validate_images(messages: list) -> None:
 
 class ChatRequest(BaseModel):
     messages: list[dict] = Field(..., description="Historique complet [{role, content}]")
+    thinking: bool = Field(default=False, description="Activer le mode pensée / raisonnement explicite")
 
 
 class PromptEditRequest(BaseModel):
@@ -223,7 +224,7 @@ def chat(req: ChatRequest) -> dict:
     if not req.messages:
         raise HTTPException(400, "messages vide")
     _validate_images(req.messages)
-    return handle_chat(req.messages)
+    return handle_chat(req.messages, thinking=req.thinking)
 
 
 def _sse(data: dict) -> str:
@@ -280,7 +281,7 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
     _validate_images(req.messages)
 
     def _generator():
-        for ev in handle_chat_stream(req.messages):
+        for ev in handle_chat_stream(req.messages, thinking=req.thinking):
             yield _sse(ev)
 
     return StreamingResponse(

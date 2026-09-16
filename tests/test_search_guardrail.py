@@ -143,6 +143,101 @@ finally:
 check("une synthèse finale est délivrée après plusieurs recherches", forced["reply"] == "Synthèse forcée.")
 check("la synthèse forcée ne relance aucun outil", not forced["reply"].startswith("J'ai enchaîné trop"))
 
+print("[4] Enchaînement mixte search_knowledge -> add_research_task -> réponse finale")
+mixed_queue = [
+    ProviderResult(content="", tool_calls=[tool_call("dernier modèle OpenAI", "m1")], provider="fake"),
+    ProviderResult(
+        content="",
+        tool_calls=[
+            {
+                "id": "m2",
+                "type": "function",
+                "function": {
+                    "name": "add_research_task",
+                    "arguments": json.dumps({"kind": "deep", "target": "dernier modèle OpenAI 2026", "reason": "non trouvé"}),
+                },
+            }
+        ],
+        provider="fake",
+    ),
+    ProviderResult(content="Selon mes connaissances, le modèle le plus récent est GPT-4o / Astra GPT 6. Une recherche Colab a été programmée.", provider="fake"),
+]
+mixed_calls: list[list[dict]] = []
+
+def mixed_failover(messages, tools, **kwargs):  # noqa: ANN001, ANN003
+    mixed_calls.append(tools or [])
+    return FailoverOutcome(mixed_queue.pop(0), SimpleNamespace(name="fake"), [], [])
+
+old_data_dir = store_module.DATA_DIR
+old_chat = chat_module.chat_with_failover
+try:
+    store_module.DATA_DIR = tempfile.mkdtemp(prefix="search-mixed-")
+    store_module.reset_store_cache()
+    with mock.patch.object(chat_module, "chat_with_failover", side_effect=mixed_failover):
+        mixed_out = chat_module.handle_chat([{"role": "user", "content": "Quel est le dernier modèle d'OpenAI ?"}])
+finally:
+    chat_module.chat_with_failover = old_chat
+    store_module.DATA_DIR = old_data_dir
+    store_module.reset_store_cache()
+
+check("la réponse finale de l'enchaînement mixte est délivrée", "Astra GPT 6" in mixed_out["reply"] or "GPT-4o" in mixed_out["reply"])
+check("l'enchaînement mixte ne déclenche pas d'erreur", not mixed_out["reply"].startswith("J'ai enchaîné trop"))
+check("la conversation a mené à son terme en 3 appels", len(mixed_calls) == 3)
+
+print("[5] Boucle mixte saturée force la synthèse finale sans message d'interruption")
+saturate_queue = [
+    ProviderResult(content="", tool_calls=[tool_call("q1", "c1")], provider="fake"),
+    ProviderResult(
+        content="",
+        tool_calls=[
+            {
+                "id": "c2",
+                "type": "function",
+                "function": {
+                    "name": "add_research_task",
+                    "arguments": json.dumps({"kind": "search", "target": "cible", "reason": "besoin"}),
+                },
+            }
+        ],
+        provider="fake",
+    ),
+    ProviderResult(
+        content="",
+        tool_calls=[
+            {
+                "id": "c3",
+                "type": "function",
+                "function": {
+                    "name": "list_research_results",
+                    "arguments": json.dumps({"limit": 1}),
+                },
+            }
+        ],
+        provider="fake",
+    ),
+    ProviderResult(content="", tool_calls=[tool_call("q4", "c4")], provider="fake"),
+    ProviderResult(content="Synthèse finale après boucle mixte saturée.", provider="fake"),
+]
+
+old_data_dir = store_module.DATA_DIR
+old_chat = chat_module.chat_with_failover
+try:
+    store_module.DATA_DIR = tempfile.mkdtemp(prefix="search-saturate-")
+    store_module.reset_store_cache()
+
+    def saturate_failover(messages, tools, **kwargs):  # noqa: ANN001, ANN003
+        return FailoverOutcome(saturate_queue.pop(0), SimpleNamespace(name="fake"), [], [])
+
+    with mock.patch.object(chat_module, "chat_with_failover", side_effect=saturate_failover):
+        sat_out = chat_module.handle_chat([{"role": "user", "content": "Question complexe"}])
+finally:
+    chat_module.chat_with_failover = old_chat
+    store_module.DATA_DIR = old_data_dir
+    store_module.reset_store_cache()
+
+check("la synthèse finale est délivrée sur boucle mixte", sat_out["reply"] == "Synthèse finale après boucle mixte saturée.")
+check("la boucle mixte ne termine pas par l'erreur enchaîné trop d'outils", not sat_out["reply"].startswith("J'ai enchaîné trop"))
+
 print(f"RÉSULTAT : {len(PASSED)} OK, {len(FAILED)} en échec")
 if FAILED:
     for item in FAILED:

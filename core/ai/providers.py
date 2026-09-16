@@ -877,6 +877,19 @@ def _tool_call(name: str, arguments: dict) -> dict:
     }
 
 
+def _wrap_demo_thinking(system: str, content: str) -> str:
+    if "MODE PENSÉE / THINKING (ACTIVÉ)" in system and content and not content.startswith("<think>"):
+        think_text = (
+            "<think>\n"
+            "1. Analyse de la demande de l'utilisateur et du contexte.\n"
+            "2. Évaluation des connaissances locales et des règles de prompt actives.\n"
+            "3. Structuration et validation de la réponse.\n"
+            "</think>\n"
+        )
+        return think_text + content
+    return content
+
+
 class LocalDemoProvider:
     name = "demo-local"
     label = "Mode démo local (aucune clé, déterministe)"
@@ -926,9 +939,10 @@ class LocalDemoProvider:
                         "je viens de détecter ce défaut et je vais corriger mon prompt)_."
                     )
                     return ProviderResult(
-                        content=(
+                        content=_wrap_demo_thinking(
+                            system,
                             f"D'après ma base de connaissances : **{e['title']}** "
-                            f"({e.get('date', '?')}) — {e.get('summary', '')}{note}"
+                            f"({e.get('date', '?')}) — {e.get('summary', '')}{note}",
                         ),
                         provider=self.name,
                         model=self.model,
@@ -941,34 +955,46 @@ class LocalDemoProvider:
                     )
                 else:
                     content = "Aucun résultat dans ma base pour cette requête."
-                return ProviderResult(content=content, provider=self.name, model=self.model)
+                return ProviderResult(
+                    content=_wrap_demo_thinking(system, content),
+                    provider=self.name,
+                    model=self.model,
+                )
             if skill == "add_research_task":
                 return ProviderResult(
-                    content=(
+                    content=_wrap_demo_thinking(
+                        system,
                         f"Tâche de recherche ajoutée (id `{data.get('id')}`, statut "
                         f"{data.get('status', 'pending')}). Le notebook Colab va l'exécuter "
-                        "— tu peux la suivre sur la page **/colab**."
+                        "— tu peux la suivre sur la page **/colab**.",
                     ),
                     provider=self.name,
                     model=self.model,
                 )
             if skill == "request_to_dev":
                 return ProviderResult(
-                    content=(
+                    content=_wrap_demo_thinking(
+                        system,
                         f"Requête envoyée au développeur (id `{data.get('id')}). "
-                        "Tu peux la suivre sur la page **/request**."
+                        "Tu peux la suivre sur la page **/request**.",
                     ),
                     provider=self.name,
                     model=self.model,
                 )
             if skill == "modify_prompt_system":
                 return ProviderResult(
-                    content=f"Mon prompt système « {data.get('scope')} » est passé en v{data.get('version')}.",
+                    content=_wrap_demo_thinking(
+                        system,
+                        f"Mon prompt système « {data.get('scope')} » est passé en v{data.get('version')}.",
+                    ),
                     provider=self.name,
                     model=self.model,
                 )
             return ProviderResult(
-                content="Outil exécuté : " + json.dumps(data, ensure_ascii=False)[:300],
+                content=_wrap_demo_thinking(
+                    system,
+                    "Outil exécuté : " + json.dumps(data, ensure_ascii=False)[:300],
+                ),
                 provider=self.name,
                 model=self.model,
             )
@@ -987,7 +1013,10 @@ class LocalDemoProvider:
 
             lines = [f"- **{s['name']}** : {s['description']}" for s in skills_manager.list_skills()]
             return ProviderResult(
-                content="Mes compétences actuelles :\n" + "\n".join(lines) + "\n\n(mode démo local)",
+                content=_wrap_demo_thinking(
+                    system,
+                    "Mes compétences actuelles :\n" + "\n".join(lines) + "\n\n(mode démo local)",
+                ),
                 provider=self.name,
                 model=self.model,
             )
@@ -1002,7 +1031,10 @@ class LocalDemoProvider:
                 else "\nAucune auto-modification pour l'instant — essaie la question Zelda !"
             )
             return ProviderResult(
-                content=f"Mon prompt système « main » est en **v{p['version']}** ({p.get('updated_by', 'seed')}).{extra}",
+                content=_wrap_demo_thinking(
+                    system,
+                    f"Mon prompt système « main » est en **v{p['version']}** ({p.get('updated_by', 'seed')}).{extra}",
+                ),
                 provider=self.name,
                 model=self.model,
             )
@@ -1036,12 +1068,19 @@ class LocalDemoProvider:
         # Moteurs cloud au repos ≠ aucune clé configurée : adapter le message.
         errors = provider_errors()
         if not errors:
-            return ProviderResult(content=_DEMO_EXPLAINED, provider=self.name, model=self.model)
+            return ProviderResult(
+                content=_wrap_demo_thinking(system, _DEMO_EXPLAINED),
+                provider=self.name,
+                model=self.model,
+            )
         retry_in = next_retry_in()
         details = "\n".join(f"- {message.split(' — ')[0]}" for message in errors[:4])
         when = f" Prochain test automatique dans **{human_delay(retry_in)}**." if retry_in else ""
         return ProviderResult(
-            content=f"{_DEMO_EXPLAINED_CLOUD_DOWN}{when}\n\nMoteurs au repos :\n{details}",
+            content=_wrap_demo_thinking(
+                system,
+                f"{_DEMO_EXPLAINED_CLOUD_DOWN}{when}\n\nMoteurs au repos :\n{details}",
+            ),
             provider=self.name,
             model=self.model,
         )

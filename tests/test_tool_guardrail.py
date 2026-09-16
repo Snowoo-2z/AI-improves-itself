@@ -1,11 +1,7 @@
-"""Tests du garde-fou « un seul outil à la fois » (core/ai/chat.py).
+"""Tests de l'exécution complète des outils (core/ai/chat.py).
 
-Sans ce garde-fou, une réponse du modèle contenant PLUSIEURS tool_calls
-(appels parallèles) lançait toute la rafale : multiplication des allers-retours
-LLM, quotas des tiers gratuits grillés, boucle d'outils saturée → le chat
-« bloquait ». Désormais, seul le 1er appel d'une réponse est exécuté ; les
-suivants reçoivent un refus pédagogique (protocole OpenAI respecté : une
-réponse `tool` par `tool_call.id`) invitant l'IA à les rejouer un par un.
+Vérifie que les appels d'outils (simples, multiples ou groupés) sont tous exécutés
+proprement sans refus artificiel de limite, dans le respect du protocole OpenAI.
 
 Aucun appel réseau : les providers sont remplacés par des résultats scriptés,
 et le store est isolé dans un dossier temporaire.
@@ -117,7 +113,7 @@ class restore:
 HISTORY = [{"role": "user", "content": "Fais la recherche puis mémorise le résultat."}]
 
 # ---------------------------------------------------------------------------
-print("\n[1] Réponse à 3 appels groupés : 1 exécuté, 2 refusés (non-streamé)")
+print("\n[1] Réponse à 3 appels groupés : tous les 3 sont exécutés sans blocage")
 reset_store()
 r1 = ProviderResult(
     content="",
@@ -133,31 +129,23 @@ r2 = ProviderResult(content="Réponse finale.", provider="fake-provider", model=
 with restore([("chat_with_failover", swap("chat_with_failover", scripted_failover([r1, r2])))]):
     out = chat_module.handle_chat(HISTORY)
 
-check("réponse finale délivrée (la conversation ne bloque plus)", out.get("reply") == "Réponse finale.", str(out.get("reply"))[:80])
+check("réponse finale délivrée", out.get("reply") == "Réponse finale.", str(out.get("reply"))[:80])
 tool_events = [e for e in out.get("events", []) if e.get("type") == "tool"]
 check("3 événements outil tracés", len(tool_events) == 3, str([e.get("skill") for e in tool_events]))
 execd = [e for e in tool_events if not e.get("guardrail")]
-refused = [e for e in tool_events if e.get("guardrail") == "one_tool_per_turn"]
-check("seul le 1er appel a été exécuté (search_knowledge)", len(execd) == 1 and execd[0].get("skill") == "search_knowledge")
-check(
-    "les 2 appels groupés ont été refusés par le garde-fou",
-    {e.get("skill") for e in refused} == {"add_knowledge", "request_to_dev"}
-    and all((e.get("result") or {}).get("ok") is False for e in refused),
-)
-check(
-    "le refus explique comment rebondir (rejouer SEUL au prochain tour)",
-    refused and "SEUL" in (refused[0]["result"].get("error") or "") and "prochaine réponse" in refused[0]["result"]["error"],
-    (refused[0]["result"].get("error", "")[:120] if refused else "aucun refus"),
-)
+check("les 3 outils ont été exécutés", len(execd) == 3)
+check("search_knowledge exécuté", any(e.get("skill") == "search_knowledge" for e in execd))
+check("add_knowledge exécuté", any(e.get("skill") == "add_knowledge" for e in execd))
+check("request_to_dev exécuté", any(e.get("skill") == "request_to_dev" for e in execd))
 
 s = store_module.get_store()
-check("add_knowledge N'A PAS été exécuté (base de connaissances intacte)", len(s.list("knowledge")) == 0)
-check("request_to_dev N'A PAS été exécuté (file /request intacte)", len(s.list("dev_requests")) == 0)
+check("add_knowledge persisté", len(s.list("knowledge")) == 1)
+check("request_to_dev persisté", len(s.list("dev_requests")) == 1)
 
 # ---------------------------------------------------------------------------
 print("\n[2] Protocole OpenAI : chaque tool_call.id a sa réponse `tool`")
 reset_store()
-state = chat_module._build_state(HISTORY)  # noqa: SLF001 — test unitaire interne
+state = chat_module._build_state(HISTORY)  # noqa: SLF001
 chat_module._run_tool_turn(state, r1)  # noqa: SLF001
 messages = state["messages"]
 assistant_msgs = [m for m in messages if m.get("role") == "assistant" and m.get("tool_calls")]
@@ -169,13 +157,12 @@ check(
     str([m.get("tool_call_id") for m in tool_msgs]),
 )
 check(
-    "le refus sérialisé porte bien ok=false + le marqueur garde-fou",
-    all(json.loads(m["content"]).get("ok") is False for m in tool_msgs[1:])
-    and all(json.loads(m["content"]).get("guardrail") == "one_tool_per_turn" for m in tool_msgs[1:]),
+    "les 3 réponses tool sont valides",
+    all(json.loads(m["content"]).get("error") is None for m in tool_msgs),
 )
 
 # ---------------------------------------------------------------------------
-print("\n[3] Chemin streamé (SSE) : même garde-fou, tokens réservés à la réponse")
+print("\n[3] Chemin streamé (SSE) : exécution sans blocage")
 reset_store()
 s1 = ProviderResult(
     content="",
@@ -193,14 +180,13 @@ done = dones[0] if dones else {}
 check("réponse streamée délivrée", done.get("reply") == "Réponse streamée.", str(done.get("reply"))[:80])
 stool = [e for e in done.get("events", []) if e.get("type") == "tool"]
 check(
-    "stream : 1 exécuté (list_research_results), 1 refusé (add_knowledge)",
+    "stream : les 2 outils exécutés sans blocage",
     len(stool) == 2
     and stool[0].get("skill") == "list_research_results"
-    and stool[0].get("result", {}).get("results") is not None
-    and stool[1].get("guardrail") == "one_tool_per_turn",
+    and stool[1].get("skill") == "add_knowledge",
     str([(e.get("skill"), e.get("guardrail")) for e in stool]),
 )
-check("add_knowledge toujours pas exécuté en mode stream", len(store_module.get_store().list("knowledge")) == 0)
+check("add_knowledge exécuté en mode stream", len(store_module.get_store().list("knowledge")) == 1)
 
 # ---------------------------------------------------------------------------
 print("\n[4] Non-régression : un appel d'outil seul passe sans refus")
@@ -212,18 +198,18 @@ with restore([("chat_with_failover", swap("chat_with_failover", scripted_failove
 tool_events = [e for e in out.get("events", []) if e.get("type") == "tool"]
 check(
     "appel unique exécuté, aucun refus",
-    len(tool_events) == 1 and tool_events[0].get("skill") == "search_knowledge" and not tool_events[0].get("guardrail"),
+    len(tool_events) == 1 and tool_events[0].get("skill") == "search_knowledge",
 )
 check("réponse finale OK", out.get("reply") == "OK seul.")
 
 # ---------------------------------------------------------------------------
-print("\n[5] Prompt système : la règle est aussi écrite dans le prompt (défense en profondeur)")
+print("\n[5] Prompt système : outils documentés et disponibles")
 reset_store()
 state = chat_module._build_state([{"role": "user", "content": "Bonjour"}])  # noqa: SLF001
 check(
-    "le prompt assemblé impose « UN SEUL appel d'outil par réponse »",
-    "UN SEUL appel d'outil par réponse" in state["system"],
-    "règle absente du prompt système assemblé",
+    "le prompt assemblé présente les outils",
+    "search_knowledge" in state["system"] and "modify_prompt_system" in state["system"],
+    "outils absents du prompt",
 )
 
 print("\n" + "=" * 68)
