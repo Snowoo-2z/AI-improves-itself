@@ -209,14 +209,11 @@ data-URL base64 (max 4 / 2 Mo, aucun stockage serveur) et les envoie dans le
 5. **Recherche web** : tasks `search`/`fetch` ponctuelles, UA honnête, usage
    raisonnable (robots.txt des cibles). Les images du chat sont validées (4 max,
    2 Mo, format image) avant tout appel LLM.
-6. **Boucle d'outils bornée** : UN SEUL appel d'outil exécuté par réponse de
-   l'IA (`MAX_PARALLEL_TOOL_CALLS = 1` dans `core/ai/chat.py`) — une rafale
-   d'appels parallèles multiplie les allers-retours LLM, grille les quotas des
-   tiers gratuits et finissait par « bloquer » le chat ; les appels groupés
-   au-delà du premier reçoivent un refus pédagogique (protocole OpenAI respecté)
-   invitant l'IA à les rejouer un par un. Au plus 3 tours d'outils sur un même
-   message (`TOOL_ITERATION_HARD_LIMIT`) : au-delà, l'historique d'outil est
-   coupé et l'excès signalé au dev (/request).
+6. **Exécution des outils** : Les appels d'outils demandés par le modèle (simples
+   ou multiples) sont exécutés selon le protocole OpenAI. Si la boucle d'outils
+   se termine ou atteint la limite d'itérations, une synthèse finale sans outils
+   (`_force_final_answer`) est systématiquement délivrée à l'utilisateur afin de
+   garantir une réponse complète.
 
 ## 9. Déploiement (100 % gratuit)
 

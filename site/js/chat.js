@@ -13,13 +13,17 @@ const convoSearch = document.getElementById("convo-search");
 const sidebar = document.getElementById("sidebar");
 const overlay = document.getElementById("overlay");
 const modelNameEl = document.getElementById("model-name");
+const thinkingBtn = document.getElementById("thinking-btn");
 
 /* ---------- État ---------- */
 const LS_CONVOS = "aiis.convos.v1";
 const LS_ACTIVE = "aiis.activeConvo.v1";
-let convos = [];      // [{id, title, createdAt, updatedAt, messages:[{role, content, events?, warn?}]}]
+const LS_THINKING = "aiis.thinking.v1";
+
+let convos = [];      // [{id, title, createdAt, updatedAt, messages:[{role, content, thinking?, events?, warn?}]}]
 let currentId = null; // null = nouveau chat (non persisté tant que vide)
 let isSending = false;
+let isThinking = false;
 
 // Vision : images en attente pour ce message (remis à zéro à chaque envoi,
 // changement de conversation ou nouveau chat). Chaque entrée = data-URL
@@ -69,6 +73,11 @@ function load() {
   if (!Array.isArray(convos)) convos = [];
   currentId = localStorage.getItem(LS_ACTIVE) || null;
   if (currentId && !current()) currentId = null;
+  try {
+    isThinking = localStorage.getItem(LS_THINKING) === "true";
+  } catch {
+    isThinking = false;
+  }
 }
 function save() {
   try {
@@ -83,6 +92,25 @@ function touch(convo) {
 
 // Icônes SVG : renvoie vers le sprite <symbol> défini dans index.html.
 const icon = (name) => `<svg class="ic" aria-hidden="true"><use href="#i-${name}" /></svg>`;
+
+function updateThinkingUI() {
+  if (!thinkingBtn) return;
+  thinkingBtn.classList.toggle("active", isThinking);
+  thinkingBtn.setAttribute("aria-pressed", isThinking ? "true" : "false");
+  thinkingBtn.title = isThinking
+    ? "Mode Pensée : ACTIVÉ (cliquer pour désactiver)"
+    : "Mode Pensée : DÉSACTIVÉ (cliquer pour activer)";
+}
+
+if (thinkingBtn) {
+  thinkingBtn.addEventListener("click", () => {
+    isThinking = !isThinking;
+    try {
+      localStorage.setItem(LS_THINKING, isThinking ? "true" : "false");
+    } catch {}
+    updateThinkingUI();
+  });
+}
 
 /* ---------- Rendu : messages ---------- */
 function scrollBottom() {
@@ -105,20 +133,52 @@ function traceCard({ cls, summaryHtml, bodyHtml, open }) {
   return d;
 }
 
+function estimateThinkingTime(thinkingText) {
+  if (!thinkingText) return "";
+  const words = thinkingText.trim().split(/\s+/).length;
+  return `${words} mot${words > 1 ? "s" : ""}`;
+}
+
+function thinkingCard(thinkingText, { open = false } = {}) {
+  const d = document.createElement("details");
+  d.className = "thinking-box";
+  if (open) d.open = true;
+  const s = document.createElement("summary");
+  s.innerHTML = `${icon("brain")}<span>Pensée</span><span class="thinking-time">(${estimateThinkingTime(thinkingText)})</span>`;
+  const content = document.createElement("div");
+  content.className = "thinking-content";
+  content.textContent = thinkingText;
+  d.append(s, content);
+  return d;
+}
+
+function parseRawThinking(raw) {
+  if (!raw) return { reply: "", thinking: "", isThinkingLive: false };
+  const openIdx = raw.indexOf("<think>");
+  if (openIdx === -1) {
+    return { reply: raw, thinking: "", isThinkingLive: false };
+  }
+  const closeIdx = raw.indexOf("</think>", openIdx);
+  if (closeIdx === -1) {
+    // Balise <think> ouverte mais non fermée : flux de pensée en cours
+    const thinking = raw.slice(openIdx + 7).trimStart();
+    const replyBefore = raw.slice(0, openIdx).trim();
+    return { reply: replyBefore, thinking, isThinkingLive: true };
+  }
+  const thinking = raw.slice(openIdx + 7, closeIdx).trim();
+  const reply = (raw.slice(0, openIdx) + raw.slice(closeIdx + 8)).trimStart();
+  return { reply, thinking, isThinkingLive: false };
+}
+
 function eventCard(ev) {
   if (ev.type === "tool") {
-    // Garde-fou « un seul outil à la fois » : les appels groupés refusés ne sont
-    // pas des erreurs de skill — on les affiche pour ce qu'ils sont (un refus).
-    const guardrail = ev.guardrail === "one_tool_per_turn" || (ev.result && ev.result.guardrail === "one_tool_per_turn");
     const args = Object.entries(ev.args || {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" · ");
     const ok = ev.result && ev.result.ok !== false;
     return traceCard({
-      summaryHtml: guardrail
-        ? `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b> refusée</span> <span class="muted">garde-fou « un seul outil à la fois »</span>`
-        : `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b></span> <span class="muted">${esc(args).slice(0, 80)}</span>`,
+      summaryHtml: `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b></span> <span class="muted">${esc(args).slice(0, 80)}</span>`,
       bodyHtml: ok
         ? "→ " + esc(JSON.stringify(ev.result)).slice(0, 400)
-        : "→ " + (guardrail ? "Garde-fou : " : "Erreur : ") + esc((ev.result || {}).error || "erreur"),
+        : "→ Erreur : " + esc((ev.result || {}).error || "erreur"),
     });
   }
   if (ev.type === "prompt_update") {
@@ -135,7 +195,6 @@ function eventCard(ev) {
 const RETEST_HTML = `${icon("rotate")}<span>re-tester la chaîne maintenant</span>`;
 
 function warnCard(w) {
-  // w = {warnings:[], provider, fallback_to_demo, retry_human}
   const retry = w.retry_human ? ` · nouvel essai dans <b>${esc(w.retry_human)}</b>` : "";
   const served = w.fallback_to_demo ? "mode démo local" : `moteur <b>${esc(w.provider)}</b>`;
   const card = traceCard({
@@ -196,6 +255,11 @@ function aiMsgEl(msg, { canRegen } = {}) {
   avatar.innerHTML = icon("atom");
   const body = document.createElement("div");
   body.className = "abody";
+
+  if (msg.thinking) {
+    body.appendChild(thinkingCard(msg.thinking, { open: false }));
+  }
+
   const content = document.createElement("div");
   content.className = "bubble md ghost";
   content.innerHTML = md(msg.content);
@@ -328,7 +392,6 @@ function renderConvoList() {
     del.innerHTML = icon("x");
     el.append(title, rn, del);
     el.addEventListener("click", (e) => {
-      // closest() car le clic peut viser le <svg>/<path> dans le bouton.
       if (e.target.closest(".crename,.cdel")) return;
       openConvo(c.id);
     });
@@ -348,7 +411,7 @@ function startRename(convo, el, titleEl) {
   const commit = (ok) => {
     if (ok && input.value.trim()) {
       convo.title = input.value.trim().slice(0, 80);
-      convo.renamedByUser = true; // le choix humain gagne désormais sur l'IA
+      convo.renamedByUser = true;
     }
     save();
     renderConvoList();
@@ -411,8 +474,6 @@ async function send(text) {
     currentId = c.id;
   }
 
-  // Contenu du tour : texte seul, ou blocs vision (texte + images).
-  // Les données image = data-URL stockés tels quels dans la conversation.
   const content = images.length
     ? [
         ...(msg ? [{ type: "text", text: msg }] : []),
@@ -439,27 +500,53 @@ async function send(text) {
 function createAssistant() {
   const wrap = document.createElement("div");
   wrap.className = "cmsg ai";
-  wrap.innerHTML = `<div class="avatar">${icon("atom")}</div><div class="abody"><div class="bubble md ghost live-bubble"></div><div class="actions"><button type="button" class="act-btn live-copy">${icon("copy")}<span>Copier</span></button></div></div>`;
-  let text = "";
+  wrap.innerHTML = `<div class="avatar">${icon("atom")}</div><div class="abody"><div class="live-thinking-slot"></div><div class="bubble md ghost live-bubble"></div><div class="actions"><button type="button" class="act-btn live-copy">${icon("copy")}<span>Copier</span></button></div></div>`;
+  let rawText = "";
+  const liveThinkingSlot = wrap.querySelector(".live-thinking-slot");
   const bubble = wrap.querySelector(".bubble");
   const copyBtn = wrap.querySelector(".live-copy");
+
   copyBtn.addEventListener("click", async () => {
     const label = copyBtn.querySelector("span");
     try {
-      await navigator.clipboard.writeText(text);
+      const parsed = parseRawThinking(rawText);
+      await navigator.clipboard.writeText(parsed.reply || rawText);
       label.textContent = "✓ Copié";
       setTimeout(() => { label.textContent = "Copier"; }, 1500);
     } catch { label.textContent = "Échec copie"; }
   });
+
   return {
     el: wrap,
     append() { if (!wrap.parentNode) chatLog.appendChild(wrap); },
     appendToken(delta) {
-      text += delta;
-      bubble.innerHTML = md(text);
+      rawText += delta;
+      const parsed = parseRawThinking(rawText);
+      if (parsed.thinking) {
+        let box = liveThinkingSlot.querySelector(".thinking-box");
+        if (!box) {
+          box = document.createElement("details");
+          box.className = "thinking-box";
+          box.open = true;
+          box.innerHTML = `
+            <summary>${icon("brain")}<span class="think-title">Réflexion en cours…</span><span class="thinking-live-badge"></span></summary>
+            <div class="thinking-content"></div>
+          `;
+          liveThinkingSlot.appendChild(box);
+        }
+        const contentEl = box.querySelector(".thinking-content");
+        if (contentEl) contentEl.textContent = parsed.thinking;
+        const titleEl = box.querySelector(".think-title");
+        const badgeEl = box.querySelector(".thinking-live-badge");
+        if (!parsed.isThinkingLive) {
+          if (titleEl) titleEl.textContent = "Pensée";
+          if (badgeEl) badgeEl.remove();
+        }
+      }
+      bubble.innerHTML = md(parsed.reply);
       scrollBottom();
     },
-    get text() { return text; },
+    get text() { return parseRawThinking(rawText).reply; },
     remove() { wrap.remove(); },
   };
 }
@@ -544,7 +631,7 @@ async function requestReply(convo) {
   try {
     await consumeStream(
       API + "/api/chat/stream",
-      { messages: apiMessages(convo) },
+      { messages: apiMessages(convo), thinking: isThinking },
       {
         onToken: (ev) => {
           if (typing.parentNode) typing.remove();
@@ -591,7 +678,13 @@ function finishReply(convo, done) {
     };
     chatLog.appendChild(warnCard(warn));
   }
-  const assistantMsg = { role: "assistant", content: done.reply, events: done.events || [], warn };
+  const assistantMsg = {
+    role: "assistant",
+    content: done.reply,
+    thinking: done.thinking || (parseRawThinking(done.reply || "").thinking || null),
+    events: done.events || [],
+    warn,
+  };
   convo.messages.push(assistantMsg);
   touch(convo);
   save();
@@ -601,9 +694,6 @@ function finishReply(convo, done) {
   renderConvoList();
   renderTitle();
 
-  // Titre auto : l'IA ne peut nommer la conversation que si l'humain n'a jamais
-  // renommé ("renamedByUser"). Non bloquant : on démarre la requête APRÈS avoir
-  // affiché la réponse, pour ne jamais ralentir le streaming en direct.
   if (!convo.renamedByUser && !convo.title) {
     generateAITitle(convo.messages).then((t) => {
       if (t && !convo.renamedByUser && !convo.title) {
@@ -619,7 +709,6 @@ function finishReply(convo, done) {
 async function regenerate() {
   const c = current();
   if (!c || isSending) return;
-  // Retire la dernière réponse IA (le dernier message user est rejoué).
   while (c.messages.length && c.messages[c.messages.length - 1].role === "assistant") c.messages.pop();
   if (!c.messages.length || c.messages[c.messages.length - 1].role !== "user") return;
   save();
@@ -627,8 +716,7 @@ async function regenerate() {
   await requestReply(c);
 }
 
-/* ---------- Statut (sidebar uniquement — le titre du haut montre le nom de la
-   conversation, plus le modèle ni le prompt) ---------- */
+/* ---------- Statut ---------- */
 function refreshStatus() {
   apiGet("/api/status")
     .then((s) => {
@@ -636,8 +724,6 @@ function refreshStatus() {
       if (!side) return;
       const main = (s.prompts || []).find((p) => p.id === "main");
       const pv = main ? ` · prompt v${main.version}` : "";
-      // Détaillé et discret : on ne montre plus « prompt main v2 (ai) » ni
-      // « store: github · repo » — juste l'état du moteur.
       if (!s.demo_mode) {
         side.innerHTML = `<span class="chip ok">${esc(s.primary_provider)}${pv}</span>`;
       } else if (s.provider_errors && s.provider_errors.length) {
@@ -778,9 +864,7 @@ document.getElementById("menu-btn").addEventListener("click", () => {
   }
 });
 overlay.addEventListener("click", closeSidebarMobile);
-// En revenant sur desktop, le mode tiroir mobile ne doit pas rester coincé.
 window.addEventListener("resize", () => { if (!isMobile()) closeSidebarMobile(); });
-// Restaure le choix desktop (repliée ou non).
 try { if (!isMobile() && localStorage.getItem(LS_SIDE) === "closed") document.body.classList.add("side-collapsed"); } catch {}
 
 /* ---------- Init ---------- */
@@ -794,6 +878,7 @@ convoSearch.addEventListener("input", renderConvoList);
 document.querySelectorAll(".sugg-card").forEach((b) => b.addEventListener("click", () => send(b.dataset.q)));
 
 load();
+updateThinkingUI();
 renderConvoList();
 renderConvo();
 refreshStatus();

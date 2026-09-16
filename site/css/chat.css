@@ -83,6 +83,118 @@ body.side-collapsed .sidebar { margin-left: -273px; }
   background: rgba(10, 14, 18, 0.7); backdrop-filter: blur(10px);
 }
 .chat-topbar .spacer { flex: 1; }
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.thinking-toggle:hover {
+  color: var(--text);
+  border-color: rgba(94, 234, 212, 0.4);
+  background: var(--card-2);
+}
+.thinking-toggle.active {
+  color: var(--accent);
+  background: rgba(94, 234, 212, 0.12);
+  border-color: rgba(94, 234, 212, 0.55);
+  box-shadow: 0 0 10px rgba(94, 234, 212, 0.15);
+}
+.thinking-toggle .ic {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.2s ease;
+}
+.thinking-toggle.active .ic {
+  transform: scale(1.05);
+}
+
+/* Collapsible Thinking Card */
+.thinking-box {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.22);
+  background: rgba(94, 234, 212, 0.03);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+.thinking-box:hover {
+  border-color: rgba(94, 234, 212, 0.4);
+}
+.thinking-box summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  user-select: none;
+  list-style: none;
+}
+.thinking-box summary::-webkit-details-marker {
+  display: none;
+}
+.thinking-box summary .ic {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+.thinking-box summary .thinking-time {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2px;
+}
+.thinking-box summary::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+.thinking-box[open] summary::after {
+  transform: rotate(180deg);
+}
+.thinking-content {
+  padding: 8px 14px 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
+  border-top: 1px solid rgba(94, 234, 212, 0.1);
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+.thinking-live-badge {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1.2s infinite ease-in-out;
+  margin-left: 4px;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
 .icon-btn {
   background: none; border: 1px solid var(--border);
   color: var(--text); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 15px;

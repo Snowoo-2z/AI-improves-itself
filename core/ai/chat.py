@@ -1,5 +1,5 @@
-"""Orchestration du chat : assemblage du prompt (garde-fous mots-clés),
-boucle d'appels d'outils (skills), et pas de RÉFLEXION.
+"""Orchestration du chat : assemblage du prompt, boucle d'appels d'outils (skills),
+mode pensée (thinking) et pas de RÉFLEXION.
 
 Le pas de réflexion est l'essence du projet : après une réponse, l'IA
 analyse sa propre sortie ; si un défaut est détecté (en mode démo : règle
@@ -10,6 +10,7 @@ historique, notification /request.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 
 from core import store as store_module
@@ -25,26 +26,8 @@ from .providers import (
     stream_with_failover,
 )
 
-MAX_TOOL_ITERATIONS = 6
-#: Garde-fou de l'ORCHESTRATEUR : dans une boucle d'outils, le modèle est interdit
-#: de rester plus de quelques tours sur le dernier message. Au-delà, le message est
-#: coupé et l'excédent signalé au dev — l'IA ne peut plus saturer son propre
-#: historique et franchir la fenêtre de contexte (faille de debut).
-TOOL_ITERATION_HARD_LIMIT = 3
-#: Garde-fou des appels groupés : les lectures sans effet de bord peuvent être
-#: regroupées pour comparer plusieurs résultats. Les actions d'écriture ou de
-#: modification restent séquentielles afin d'éviter les rafales coûteuses et
-#: les effets de bord. Tout appel refusé reçoit quand même une réponse `tool`
-#: (le protocole OpenAI exige une réponse par `tool_call.id`).
-MAX_PARALLEL_TOOL_CALLS = 1
-#: Les recherches et lectures sont sans effet de bord : plusieurs peuvent être
-#: groupées dans une seule réponse pour comparer des formulations. Les outils
-#: d'écriture restent soumis à MAX_PARALLEL_TOOL_CALLS.
-MAX_PARALLEL_READ_ONLY_CALLS = 3
+MAX_TOOL_ITERATIONS = 15
 READ_ONLY_PARALLEL_SKILLS = {"search_knowledge", "list_research_results"}
-#: Même en séquentiel, on borne une skill par message utilisateur. Cette limite
-#: évite une boucle LLM↔outil sans empêcher quelques recherches complémentaires.
-MAX_TOOL_CALLS_PER_SKILL = 3
 
 _DATE_RULE_MARKER = "[REGLE-AJOUTEE-PAR-IA]"
 _DATE_RULE = (
@@ -56,6 +39,36 @@ _DATE_RULE = (
     "la base de connaissances sans vérifier la date demandée — c'est exactement le "
     "défaut que j'ai commis (question « dernier Zelda » → réponse avec le Zelda de 1986)."
 )
+
+THINKING_DIRECTIVE = (
+    "\n\n---\n\n"
+    "## MODE PENSÉE / THINKING (ACTIVÉ)\n"
+    "Avant de formuler ta réponse finale, explicite l'intégralité de ta réflexion et de ton raisonnement "
+    "pas à pas à l'intérieur d'un bloc balisé <think>...</think>.\n"
+    "Dans ce bloc :\n"
+    "- Décompose et analyse la demande de l'utilisateur.\n"
+    "- Détermine la meilleure stratégie, les outils nécessaires si besoin, et les étapes logiques.\n"
+    "- Valide la cohérence et l'exactitude des faits avant de formuler la réponse.\n"
+    "Referme impérativement la balise avec </think>, puis formule directement ta réponse finale "
+    "à destination de l'utilisateur en dehors de ces balises."
+)
+
+
+def _extract_thinking(raw: str) -> tuple[str, str | None]:
+    """Sépare le bloc <think>...</think> de la réponse finale."""
+    if not raw:
+        return "", None
+    match = re.search(r"<think>(.*?)</think>", raw, flags=re.DOTALL | re.IGNORECASE)
+    if match:
+        thinking = match.group(1).strip()
+        reply = (raw[: match.start()] + raw[match.end() :]).strip()
+        return reply, thinking if thinking else None
+    open_match = re.search(r"<think>(.*)$", raw, flags=re.DOTALL | re.IGNORECASE)
+    if open_match:
+        thinking = open_match.group(1).strip()
+        reply = raw[: open_match.start()].strip()
+        return reply, thinking if thinking else None
+    return raw.strip(), None
 
 
 def _textify_content(content) -> str:
@@ -134,41 +147,8 @@ def _seed_stores() -> None:
     store_module.get_store().seed_if_empty("research_results", [])
 
 
-def _announce_excess_iterations(last_user_index: int, iterations: int, max_user: int) -> dict:
-    """Garde-fou : le dernier message utilisateur est saturé d'appels d'outils.
-
-    On note un `last_user_index` convenu entre le front et le back (le front
-    saura quels messages purger de l'historique avant de re-causer), puis on
-    ouvre une requête au dev — non seulement pour auditer, mais parce que le
-    champ `last_user_index` ne traverse pas les conversations relues plus tard.
-    """
-    store_module.get_store().add(
-        "dev_requests",
-        {
-            "title": "[Garde-fou] Boucle d'outils saturée sur le dernier message",
-            "description": (
-                f"La boucle LLM↔outils a passé {iterations} tours (limite {max_user}) sur le dernier "
-                "message utilisateur, sans réponse finale. Le message a été coupé et l'historique "
-                "en excès signalé au front (champ `last_user_index` réinjecté dans `messages`). "
-                "À surveiller : une IA qui enchaîne les auto-modifications pourrait masquer un défaut."
-            ),
-            "type": "other",
-            "from_role": "ai",
-            "status": "info",
-        },
-    )
-    return {
-        "announce_slack": "garde-fou boucle d'outils",
-        "last_user_index": last_user_index,
-    }
-
-
 def _tool_message_for(tc: dict) -> dict | None:
-    """Exécute un tool_call et prépare la réponse `tool` pour le LLM.
-
-    Retourne None si le skills manager a renvoyé `ok=False` (l'IA est alors
-    privée du retour ET du droit de réessayer le même outil — anti-boucle).
-    """
+    """Exécute un tool_call et prépare la réponse `tool` pour le LLM."""
     fn = tc.get("function", {})
     name = fn.get("name", "")
     try:
@@ -187,14 +167,17 @@ def _tool_message_for(tc: dict) -> dict | None:
     }
 
 
-def _build_state(history: list[dict]) -> dict:
+def _build_state(history: list[dict], thinking: bool = False) -> dict:
     """Prépare le tour : prompt choisi, messages système, outils, compteurs."""
     _seed_stores()
     user_text = _last_user_text(history)
     chosen = registry.select_for_user_input(user_text)
     system = registry.assemble_system_prompt(chosen)
+    if thinking:
+        system += THINKING_DIRECTIVE
     return {
         "user_text": user_text,
+        "thinking": thinking,
         "chosen": chosen,
         "system": system,
         "messages": [{"role": "system", "content": system}, *history],
@@ -229,42 +212,6 @@ def _note_outcome(state: dict, outcome) -> None:
         state["errors"].append(message)
 
 
-def _parallel_tool_refusal(tc: dict, position: int, kept: str) -> dict:
-    """Refus d'un appel d'outil groupé (au-delà du 1er de la réponse).
-
-    Le protocole OpenAI exige UNE réponse `tool` par `tool_call.id` : on ne peut
-    pas ignorer l'appel — on le refuse explicitement, avec le mode d'emploi
-    (rejouer SEUL l'outil au prochain tour). La clé `guardrail` permet au front
-    d'afficher le refus comme un garde-fou plutôt qu'une erreur de skill.
-    """
-    name = tc.get("function", {}).get("name", "")
-    return {
-        "ok": False,
-        "error": (
-            "Appel d'outil refusé (garde-fou : UN SEUL outil exécuté par réponse, "
-            "jamais d'appels groupés). "
-            f"Cette réponse a exécuté « {kept} » ; « {name} » arrivait en position {position}. "
-            "Si tu en as encore besoin, relance cet outil SEUL dans ta prochaine réponse, "
-            "attends son retour, puis enchaîne."
-        ),
-        "guardrail": "one_tool_per_turn",
-    }
-
-
-def _parallel_read_limit_refusal(tc: dict, position: int) -> dict:
-    """Refus lisible au-delà du nombre de lectures regroupables."""
-    name = _tool_name(tc)
-    return {
-        "ok": False,
-        "error": (
-            f"Lecture « {name} » refusée en position {position} : maximum "
-            f"{MAX_PARALLEL_READ_ONLY_CALLS} lectures dans une même réponse. "
-            "Synthétise les résultats déjà reçus avant de poursuivre."
-        ),
-        "guardrail": "parallel_read_limit",
-    }
-
-
 def _tool_name(tc: dict) -> str:
     function = tc.get("function") or {}
     return str(function.get("name") or "")
@@ -290,13 +237,7 @@ def _tool_signature(tc: dict) -> str:
 
 
 def _disable_tool(state: dict, name: str) -> None:
-    """Retire un outil devenu inutile pour la suite du même message.
-
-    Le provider reçoit réellement la liste réduite : il ne peut donc pas
-    reformuler à l'infini une recherche vide. Les autres outils restent
-    disponibles (par exemple `add_research_task` pour aller chercher le sujet
-    sur le web).
-    """
+    """Retire un outil devenu inutile pour la suite du même message."""
     if not name:
         return
     state.setdefault("disabled_tools", set()).add(name)
@@ -305,17 +246,6 @@ def _disable_tool(state: dict, name: str) -> None:
         for tool in state.get("tools", [])
         if (tool.get("function") or {}).get("name") != name
     ]
-
-
-def _tool_loop_refusal(name: str, reason: str) -> dict:
-    return {
-        "ok": False,
-        "error": (
-            f"Appel de {name or 'cet outil'} interrompu par le garde-fou anti-boucle : {reason} "
-            "Réponds avec les informations déjà reçues, ou utilise un autre outil utile."
-        ),
-        "guardrail": "tool_loop",
-    }
 
 
 def _read_only_result(result: ProviderResult) -> bool:
@@ -332,16 +262,15 @@ def _read_only_stretch(state: dict, result: ProviderResult) -> bool:
     )
 
 
-def _force_final_read_only_answer(state: dict) -> str | None:
-    """Demande une synthèse sans outils après trop de lectures successives.
+def _force_final_answer(state: dict) -> str | None:
+    """Demande une synthèse finale sans outils.
 
-    Ce dernier appel ne peut plus relancer une recherche : même un modèle qui
-    ignore la consigne de regroupement doit donc terminer par du texte plutôt
-    que tomber sur le message « trop d'outils » affiché à l'utilisateur.
+    Ce dernier appel ne peut plus relancer d'outil (tools=[]) : le modèle termine
+    par du texte plutôt que de bloquer la réponse.
     """
     try:
         outcome = chat_with_failover(state["messages"], [])
-    except Exception:  # noqa: BLE001 — le garde-fou final ne doit jamais bloquer
+    except Exception:  # noqa: BLE001
         return None
     _note_outcome(state, outcome)
     result = outcome.result
@@ -352,84 +281,31 @@ def _force_final_read_only_answer(state: dict) -> str | None:
     return result.content or "(réponse vide)"
 
 
-def _append_refused_tool(state: dict, tool_msgs: list[dict], tc: dict, refusal: dict) -> None:
-    name = _tool_name(tc)
-    args = _tool_args(tc)
-    tool_msgs.append(
-        {
-            "role": "tool",
-            "tool_call_id": tc.get("id", "call-0"),
-            "name": name,
-            "content": json.dumps(refusal, ensure_ascii=False),
-        }
-    )
-    state["events"].append(
-        {
-            "type": "tool",
-            "skill": name,
-            "args": args,
-            "result": refusal,
-            "guardrail": refusal.get("guardrail"),
-        }
-    )
+_force_final_read_only_answer = _force_final_answer
 
 
 def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
     """Exécute les tool_calls d'un résultat et alimente `messages` + `events`.
 
-    Ordre OpenAI attendu : [assistant(tool_calls), tool(call_1), tool(call_2), …].
-    On exécute donc d'abord les outils, puis on insère le message assistant
-    avant les retours `tool`. Un outil refusé (`ok=False`) reçoit un retour
-    d'échec plutôt que rien, pour que l'IA rebondisse au lieu de réitérer.
-
-    Garde-fou : une réponse composée uniquement de lectures (`search_knowledge`
-    ou `list_research_results`) peut contenir jusqu'à
-    `MAX_PARALLEL_READ_ONLY_CALLS` appels. Dès qu'une action d'écriture est
-    présente, seuls les `MAX_PARALLEL_TOOL_CALLS` premiers appels sont exécutés ;
-    chaque appel refusé reçoit tout de même une réponse `tool`, protocole
-    OpenAI oblige.
+    Tous les tool_calls demandés par le modèle sont exécutés et insérés
+    selon le protocole OpenAI : [assistant(tool_calls), tool(call_1), tool(call_2), …].
     """
     tool_calls = list(result.tool_calls or [])
-    kept_name = _tool_name(tool_calls[0]) if tool_calls else ""
-    # Une rafale entièrement composée de lectures est sûre et utile pour
-    # comparer plusieurs requêtes. Dès qu'une écriture est mélangée, on revient
-    # à la règle stricte : une seule action d'état par réponse.
-    read_only_batch = bool(tool_calls) and all(
-        _tool_name(tc) in READ_ONLY_PARALLEL_SKILLS for tc in tool_calls
-    )
     tool_msgs: list[dict] = []
-    for position, tc in enumerate(tool_calls, start=1):
+    signatures = state.setdefault("tool_call_signatures", set())
+    counts = state.setdefault("tool_call_counts", {})
+
+    for tc in tool_calls:
         name = _tool_name(tc)
         args = _tool_args(tc)
-        if read_only_batch and position > MAX_PARALLEL_READ_ONLY_CALLS:
-            refusal = _parallel_read_limit_refusal(tc, position)
-            _append_refused_tool(state, tool_msgs, tc, refusal)
-            continue
-        if not read_only_batch and position > MAX_PARALLEL_TOOL_CALLS:
-            refusal = _parallel_tool_refusal(tc, position, kept_name)
-            _append_refused_tool(state, tool_msgs, tc, refusal)
-            continue
-
         signature = _tool_signature(tc)
-        signatures = state.setdefault("tool_call_signatures", set())
-        counts = state.setdefault("tool_call_counts", {})
         count = int(counts.get(name, 0))
-        if signature in signatures:
-            refusal = _tool_loop_refusal(name, "cet appel identique a déjà été exécuté")
-            _append_refused_tool(state, tool_msgs, tc, refusal)
-            _disable_tool(state, name)
-            continue
-        if count >= MAX_TOOL_CALLS_PER_SKILL:
-            refusal = _tool_loop_refusal(name, "cette skill a déjà été appelée trop souvent")
-            _append_refused_tool(state, tool_msgs, tc, refusal)
-            _disable_tool(state, name)
-            continue
 
         signatures.add(signature)
         counts[name] = count + 1
         tool_state = _tool_message_for(tc)
         if tool_state is None:
-            result_ok = {"ok": False, "error": "exécution refusée (skill inconnue ou échec)"}
+            result_ok = {"ok": False, "error": f"exécution impossible pour {name}"}
             tool_msgs.append(
                 {
                     "role": "tool",
@@ -447,6 +323,7 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
                 }
             )
             continue
+
         tool_msgs.append(
             {
                 "role": "tool",
@@ -456,12 +333,13 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
             }
         )
         state["events"].append(tool_state["_event"])
-        # Un résultat vide est une réponse définitive pour cette base locale.
-        # Retirer seulement la recherche laisse encore `add_research_task`
-        # disponible si le modèle comprend qu'il faut consulter le web.
+
         tool_result = tool_state["_event"].get("result") or {}
         if name == "search_knowledge" and not tool_result.get("entries"):
             _disable_tool(state, name)
+        elif name == "list_research_results" and not tool_result.get("results"):
+            _disable_tool(state, name)
+
     state["messages"].append(
         {
             "role": "assistant",
@@ -470,10 +348,6 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
         }
     )
     state["messages"].extend(tool_msgs)
-    # Les blocs vision (image_url) ne traversent PAS la boucle d'outils : après
-    # le 1er appel ils sont remplacés par du texte, pour que l'historique en
-    # mémoire reste valide (le provider ne garde pas les images d'un tour à
-    # l'autre). Le rendu affiché, lui, conserve les images (le front les garde).
     if any(
         m.get("role") == "user" and isinstance(m.get("content"), list)
         for m in state["messages"]
@@ -490,25 +364,17 @@ def _next_retry_fields() -> dict:
     }
 
 
-def _live_turn(history: list[dict]) -> Iterator[dict]:
+def _live_turn(history: list[dict], thinking: bool = False) -> Iterator[dict]:
     """Un tour de chat en streaming, identique sur le plan logique à `handle_chat`.
 
     Produit des événements `{type: "token", content, provider, model, first}`
-    (chaque `token` est un delta réel, diffusé EN DIRECT) puis UN événement
-    final `{type: "done", reply, provider, model, events, warnings?, attempts?,
-    ...}`.
-
-    Les tours d'outils (skills) sont exécutés côté serveur : quand le premier
-    appel est un pur appel d'outil, aucun token n'est émis ; la diffusion ne
-    commence que sur la réponse finale (via le provider qui y répond).
+    puis UN événement final `{type: "done", reply, thinking, provider, model, events, ...}`.
     """
-    state = _build_state(history)
+    state = _build_state(history, thinking=thinking)
     history_n = len(history)
-
-    last_user_stretch = 0
     first_token = True
+
     for iteration in range(MAX_TOOL_ITERATIONS):
-        # --- Un appel (potentiellement streamé) ---------------------------
         result: ProviderResult | None = None
         provider_name = ""
         model = ""
@@ -531,7 +397,6 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
                 _note_outcome(state, ev)
                 continue
         if result is None:
-            # Garde-fou ultime : aucun moteur n'a produit de résultat exploitable.
             reply = "(réponse vide)"
             done = _finalize_done(state, reply, history_n)
             done.update({"type": "done", "streamed": True})
@@ -542,27 +407,10 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         state["model"] = model
 
         if result.tool_calls:
-            last_user_stretch += 1
-            if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
-                if _read_only_stretch(state, result):
-                    forced_reply = _force_final_read_only_answer(state)
-                    if forced_reply is not None:
-                        extra = _announce_excess_iterations(
-                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
-                        )
-                        done = _finalize_done(state, forced_reply, history_n, extra)
-                        done.update({"type": "done", "streamed": True})
-                        yield done
-                        return
-                break
             _run_tool_turn(state, result)
             continue
 
         # --- Tour vision (images dans l'historique) -------------------------
-        # Les modèles vision renvoient parfois un `content` vide (pas de texte)
-        # même pour une vraie réponse visuelle : on reconstitue un texte
-        # affichable, porté par le dernier message utilisateur. Le mode démo ne
-        # peut pas décrire les images → il l'explique honnêtement.
         if any(
             m.get("role") == "user" and isinstance(m.get("content"), list)
             for m in history
@@ -588,44 +436,42 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         yield done
         return
 
-    # Garde-fou : trop d'outils enchaînés sur le dernier message.
-    extra = _announce_excess_iterations(history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT)
-    reply = (
-        "J'ai enchaîné trop d'outils (auto-analyse) sans parvenir à une réponse finale : "
-        "j'ai signalé cet excès au développeur. Repose ta question, je serai plus concis."
+    # Synthèse finale sans outils si fin d'itérations
+    forced_result: ProviderResult | None = None
+    for ev in stream_with_failover(state["messages"], []):
+        if ev.get("type") == "token" and isinstance(ev.get("content"), str):
+            yield {
+                "type": "token",
+                "content": ev["content"],
+                "provider": ev.get("provider", ""),
+                "model": ev.get("model", ""),
+                "first": first_token,
+            }
+            first_token = False
+            continue
+        if ev.get("type") == "result":
+            forced_result = ev.get("result")
+            _note_outcome(state, ev)
+
+    forced_reply = (
+        forced_result.content
+        if forced_result and forced_result.content
+        else _force_final_answer(state)
     )
-    if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
-        _trim_excess_turns(state, history_n)
-    done = _finalize_done(state, reply, history_n, extra)
+    reply = forced_reply if forced_reply is not None else "(réponse vide)"
+    done = _finalize_done(state, reply, history_n)
     done.update({"type": "done", "streamed": True})
     yield done
-
-
-def _trim_excess_turns(state: dict, history_n: int) -> None:
-    """Retire les derniers tours assistant/tool d'une boucle en excès.
-
-    On garde le début strict de la conversation (system + historique d'origine)
-    ainsi que le dernier tour assistant/tool, pour que l'utilisateur conserver
-    son contexte sans que la fenêtre de tokens ne déborde.
-    """
-    messages = state["messages"]
-    base = messages[: history_n + 1]  # system + historique réel de la conversation
-    tail = messages[history_n + 1 :]  # tours assistant/tool accumulés par la boucle
-    # On ne garde que le dernier tour assistant→outils (contexte immédiat).
-    cut = 0
-    for i in range(len(tail) - 1, -1, -1):
-        if tail[i].get("role") == "tool":
-            cut = i
-            break
-    state["messages"] = base + tail[cut:]
 
 
 def _finalize_done(state: dict, reply: str, history_n: int, extra: dict | None = None) -> dict:
     """Construit l'événement final `done` (réflexion démo comprise)."""
     events = list(state["events"])
-    # --- Pas de réflexion : l'IA analyse sa propre réponse ---
+    clean_reply, extracted_thinking = _extract_thinking(reply)
+    final_reply = clean_reply if clean_reply else reply
+
     if state["provider"] == "demo-local" and _demo_needs_reflection(
-        state["user_text"], state["system"], reply
+        state["user_text"], state["system"], final_reply
     ):
         result = _demo_apply_self_correction(
             "main",
@@ -646,7 +492,8 @@ def _finalize_done(state: dict, reply: str, history_n: int, extra: dict | None =
             )
 
     out: dict = {
-        "reply": reply,
+        "reply": final_reply,
+        "thinking": extracted_thinking,
         "provider": state["provider"],
         "model": state["model"],
         "events": events,
@@ -662,15 +509,14 @@ def _finalize_done(state: dict, reply: str, history_n: int, extra: dict | None =
     return out
 
 
-def handle_chat(history: list[dict]) -> dict:
+def handle_chat(history: list[dict], thinking: bool = False) -> dict:
     """Traiter une conversation (l'ensemble du historique est envoyé par le site).
 
-    Retourne : { reply, provider, events: [{type: tool|prompt_update, ...}], system_assembled: bool }
+    Retourne : { reply, thinking, provider, events: [{type: tool|prompt_update, ...}], system_assembled: bool }
     """
-    state = _build_state(history)
+    state = _build_state(history, thinking=thinking)
     history_n = len(history)
 
-    last_user_stretch = 0
     for iteration in range(MAX_TOOL_ITERATIONS):
         outcome = chat_with_failover(state["messages"], state["tools"])
         _note_outcome(state, outcome)
@@ -679,16 +525,6 @@ def handle_chat(history: list[dict]) -> dict:
         state["model"] = getattr(result, "model", "") or ""
 
         if result.tool_calls:
-            last_user_stretch += 1
-            if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
-                if _read_only_stretch(state, result):
-                    forced_reply = _force_final_read_only_answer(state)
-                    if forced_reply is not None:
-                        extra = _announce_excess_iterations(
-                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
-                        )
-                        return _finalize_done(state, forced_reply, history_n, extra)
-                break
             _run_tool_turn(state, result)
             continue
 
@@ -710,26 +546,11 @@ def handle_chat(history: list[dict]) -> dict:
         reply = result.content or "(réponse vide)"
         return _finalize_done(state, reply, history_n)
 
-    extra = _announce_excess_iterations(history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT)
-    reply = (
-        "J'ai enchaîné trop d'outils (auto-analyse) sans parvenir à une réponse finale : "
-        "j'ai signalé cet excès au développeur. Repose ta question, je serai plus concis."
-    )
-    if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
-        _trim_excess_turns(state, history_n)
-    return _finalize_done(state, reply, history_n, extra)
+    forced_reply = _force_final_answer(state)
+    reply = forced_reply if forced_reply is not None else "(réponse vide)"
+    return _finalize_done(state, reply, history_n)
 
 
-def handle_chat_stream(history: list[dict]) -> Iterator[dict]:
-    """Comme `handle_chat`, mais la réponse finale est diffusée en streaming (SSE).
-
-    Produit une séquence d'événements dict :
-    - fragments texte : { type: "token", content, provider, model, first }
-    - message final   : { type: "done", reply, provider, model, streamed,
-      events, prompt_ids, warnings?, fallback_to_demo?, attempts? }
-
-    Le premier fragment `done` porte le flag `streamed=true`. Les tours d'outils
-    (skills) sont exécutés côté serveur en non-streamé : le front ne reçoit des
-    tokens que pour la réponse finale, jamais pour les appels intermédiaires.
-    """
-    yield from _live_turn(history)
+def handle_chat_stream(history: list[dict], thinking: bool = False) -> Iterator[dict]:
+    """Comme `handle_chat`, mais la réponse finale est diffusée en streaming (SSE)."""
+    yield from _live_turn(history, thinking=thinking)
