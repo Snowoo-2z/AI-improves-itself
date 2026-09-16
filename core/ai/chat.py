@@ -31,6 +31,16 @@ MAX_TOOL_ITERATIONS = 6
 #: coupé et l'excédent signalé au dev — l'IA ne peut plus saturer son propre
 #: historique et franchir la fenêtre de contexte (faille de debut).
 TOOL_ITERATION_HARD_LIMIT = 3
+#: Garde-fou « un seul outil à la fois » : une seule réponse du modèle peut
+#: contenir PLUSIEURS tool_calls (appels parallèles) ; exécuter toute la rafale
+#: multiplie les allers-retours LLM, grille le quota des tiers gratuits (429) et
+#: finit par saturer la boucle d'outils — le chat « bloque ». Seul le PREMIER
+#: appel de chaque réponse est exécuté ; les suivants reçoivent un refus
+#: explicite (le protocole OpenAI exige une réponse `tool` par `tool_call.id`,
+#: on ne peut pas simplement les ignorer) qui invite l'IA à rejouer l'outil SEUL
+#: au tour suivant. Les chaînes d'outils restent possibles, simplement
+#: séquentielles — ce que le prompt système impose déjà (voir prompts/main.json).
+MAX_PARALLEL_TOOL_CALLS = 1
 
 _DATE_RULE_MARKER = "[REGLE-AJOUTEE-PAR-IA]"
 _DATE_RULE = (
@@ -212,16 +222,65 @@ def _note_outcome(state: dict, outcome) -> None:
         state["errors"].append(message)
 
 
+def _parallel_tool_refusal(tc: dict, position: int, kept: str) -> dict:
+    """Refus d'un appel d'outil groupé (au-delà du 1er de la réponse).
+
+    Le protocole OpenAI exige UNE réponse `tool` par `tool_call.id` : on ne peut
+    pas ignorer l'appel — on le refuse explicitement, avec le mode d'emploi
+    (rejouer SEUL l'outil au prochain tour). La clé `guardrail` permet au front
+    d'afficher le refus comme un garde-fou plutôt qu'une erreur de skill.
+    """
+    name = tc.get("function", {}).get("name", "")
+    return {
+        "ok": False,
+        "error": (
+            "Appel d'outil refusé (garde-fou : UN SEUL outil exécuté par réponse, "
+            "jamais d'appels groupés). "
+            f"Cette réponse a exécuté « {kept} » ; « {name} » arrivait en position {position}. "
+            "Si tu en as encore besoin, relance cet outil SEUL dans ta prochaine réponse, "
+            "attends son retour, puis enchaîne."
+        ),
+        "guardrail": "one_tool_per_turn",
+    }
+
+
 def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
     """Exécute les tool_calls d'un résultat et alimente `messages` + `events`.
 
     Ordre OpenAI attendu : [assistant(tool_calls), tool(call_1), tool(call_2), …].
-    On exécute donc d'abord tous les outils, puis on insère le message assistant
+    On exécute donc d'abord les outils, puis on insère le message assistant
     avant les retours `tool`. Un outil refusé (`ok=False`) reçoit un retour
     d'échec plutôt que rien, pour que l'IA rebondisse au lieu de réitérer.
+
+    Garde-fou « un seul outil à la fois » : seuls les `MAX_PARALLEL_TOOL_CALLS`
+    premiers appels d'une réponse sont exécutés ; les appels groupés suivants
+    reçoivent un refus pédagogique (`_parallel_tool_refusal`) — chaque
+    `tool_call_id` a quand même sa réponse, le protocole reste valide.
     """
+    tool_calls = list(result.tool_calls or [])
+    kept_name = (tool_calls[0].get("function") or {}).get("name", "") if tool_calls else ""
     tool_msgs: list[dict] = []
-    for tc in result.tool_calls or []:
+    for position, tc in enumerate(tool_calls, start=1):
+        if position > MAX_PARALLEL_TOOL_CALLS:
+            refusal = _parallel_tool_refusal(tc, position, kept_name)
+            tool_msgs.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", "call-0"),
+                    "name": tc.get("function", {}).get("name", ""),
+                    "content": json.dumps(refusal, ensure_ascii=False),
+                }
+            )
+            state["events"].append(
+                {
+                    "type": "tool",
+                    "skill": tc.get("function", {}).get("name", ""),
+                    "args": {},
+                    "result": refusal,
+                    "guardrail": "one_tool_per_turn",
+                }
+            )
+            continue
         tool_state = _tool_message_for(tc)
         if tool_state is None:
             result_ok = {"ok": False, "error": "exécution refusée (skill inconnue ou échec)"}

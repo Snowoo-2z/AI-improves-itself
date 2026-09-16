@@ -72,7 +72,7 @@ def _migrate_legacy_tasks_once(new: str) -> None:
         os.makedirs(os.path.dirname(new), exist_ok=True)
         with open(new, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)
-        print(f"[store] taches migrees : colab/tasks.json -> core/data/research_tasks.json "
+        print(f"[store] taches migrees : colab/tasks.json -> {new} "
               f"({len(data)} tache(s)).", file=sys.stderr)
     except (ValueError, OSError) as exc:
         print(f"[store] migration des taches impossible ({exc}) - demarrage avec 0 tache.",
