@@ -10,8 +10,11 @@ Mécanique :
    avec `tasks.json` (par id).
 3. Chaque tâche `pending` est exécutée, marquée `done`/`failed` (localement +
    repoussé au site), et un résultat est écrit dans `results.json`.
-4. Les nouveaux résultats sont poussés vers le site : POST /api/research/results —
-   l'IA pourra ensuite les étudier (skill list_research_results).
+4. Les nouveaux résultats sont poussés vers le site : POST /api/research/results.
+   Le site déclenche alors l'étude IA : structuration + vérification (2 appels
+   Mistral), puis écriture dans la base de connaissances si l'entrée est validée.
+   L'IA de chat peut ensuite relire les résultats (skill list_research_results)
+   et ajouter elle-même des entrées (skill add_knowledge).
 
 Exécution en local (hors Colab) :
     pip install requests beautifulsoup4

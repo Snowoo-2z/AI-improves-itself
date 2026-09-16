@@ -50,7 +50,8 @@ utilisateur ──question──► assemble prompt (main + modules par mots-cl�
    PAS DE RÉFLEXION                           ├─ add_research_task (file /colab)
    analyser sa propre réponse                 ├─ request_to_dev (file /request)
               │                                ├─ list_research_results
-    défaut détecté ?                          └─ update_skill_description
+    défaut détecté ?                          ├─ add_knowledge (mémoriser une info)
+              ▼                                └─ update_skill_description
               ▼
    modify_prompt_system (scope, reason, new_content)
               │
@@ -80,7 +81,9 @@ page /prompt (visible, réversible)  └─────────► page /req
 - `scope: "global"` (main) toujours chargé ; les autres sont des **garde-fous** :
   chargés si un mot-clé du `keywords` apparaît dans le message utilisateur
   (`code.json` : code/bug/python/api… ; `recherche.json` : scrape/colab/veille…).
-- Assemblage : `## PROMPT [id · scope · vN]` + contenu, un bloc par module.
+- Assemblage : `## DATE DU JOUR (…)` en tête (l'IA sait « aujourd'hui » ; ce
+  bloc est généré par `registry.current_date_header()`) puis
+  `## PROMPT [id · scope · vN]` + contenu, un bloc par module.
 - **Modifications IA** : skill `modify_prompt_system` → garde-fou sécurité
   (longueur 40–12 000 car, rejet si une clé API détectée y figure) → version++,
   historique (30 dernières) → notification `/request`.
@@ -97,6 +100,7 @@ page /prompt (visible, réversible)  └─────────► page /req
 | `request_to_dev` | ouvre une requête /request | feature/ui/bug/skill/other. |
 | `add_research_task` | programme une tâche /colab | search (requête) / fetch (URL). |
 | `list_research_results` | lit les derniers résultats | exécutés par le notebook Colab. |
+| `add_knowledge` | ajoute une entrée à la base | `{title, category, date, summary, source}` — l'IA mémorise une info vérifiée. |
 | `update_skill_description` | affine la description d'une skill | persistée dans `core/skills/descriptions.json` (reviewable en git). |
 
 Sécurité : whitelist stricte (n'importe quel nom non référencé = refus), arguments
@@ -147,8 +151,21 @@ servait plus, la recherche s'exécute uniquement via le notebook Colab.
 |---|---|---|---|
 | **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
 
-Flux : IA → tâche `pending` → Colab → `done` + `research_results` →
-l'IA lit via `list_research_results` → décide (étude, mise à jour de la base).
+Flux : IA → tâche `pending` → Colab → `done` + `research_results` → l'IA lit via
+`list_research_results` → décide (étude, mise à jour de la base).
+
+**Étude des résultats (sur le site)** — `core/research/service.py` :
+quand Colab pousse un résultat (`POST /api/research/results`), le site déclenche
+l'étude **en arrière-plan** (le POST répond immédiatement ; le bilan `study` est
+réécrit sur le résultat, visible sur /colab). Deux appels LLM par résultat, sans
+aucune clé dans Colab :
+1. **structuration** (1er appel) : le brut est transformé en entrée de base
+   `{title, category, date, summary, source}` + une confiance de 0 à 1 ;
+2. **vérification** (2e appel) : pertinence/cohérence/source de l'entrée
+   proposée — `approve=false` ou confiance < 0,55 ⇒ rien n'est écrit.
+Chaque appel reçoit explicitement la **date du jour** (sinon l'IA ne sait pas
+dater une info web). Écriture seulement si les deux passes acceptent et si
+l'entrée n'est pas un doublon (titre/summary identiques).
 Le `fetch` honore les robots.txt de la cible ; l'objectif est la
 **recherche ponctuelle**, pas le crawl.
 

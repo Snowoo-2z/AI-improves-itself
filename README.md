@@ -45,7 +45,7 @@ AI-improves-itself/
 |---|---|---|
 | **Prompt système** | `core/prompt_system/` | L'IA peut modifier son propre prompt (ex. après une réponse où elle a ignoré une date, elle ajoute elle-même la règle « trier par date quand on demande le plus récent »). Chaque modif = **version + historique + notification /request + garde-fou anti-fuite de clés API**. Les garde-fous par **mots-clés** chargent des modules spécialisés (`code`, `recherche`, …). |
 | **Skills** | `core/skills/` | L'IA peut affiner les **descriptions** de ses skills (auto-amélioration légère). De **nouvelle** skill = code humain : l'IA ouvre une requête sur `/request`. |
-| **Recherche web** | `colab/` | L'IA programme des tâches (`search`/`fetch`) ; le notebook Colab (script mis à jour par les tâches) les exécute ; les résultats reviennent au site et l'IA les étudie. |
+| **Recherche web** | `colab/` | L'IA programme des tâches (`search`/`fetch`) ; le notebook Colab (script mis à jour par les tâches) les exécute ; les résultats reviennent au site, qui les **structure puis vérifie** (2 appels IA) avant de les inscrire dans la base de connaissances. |
 | **Base de données** | `core/data/` → `supabase/` | JSON local pour l'instant, schéma Supabase prêt (phase 2), repo GitHub privé prévu pour les données. |
 
 **Démo intégrée sans aucune clé API** : le mode démo reproduit fidèlement l'exemple du README —
