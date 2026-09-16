@@ -107,11 +107,18 @@ function traceCard({ cls, summaryHtml, bodyHtml, open }) {
 
 function eventCard(ev) {
   if (ev.type === "tool") {
+    // Garde-fou « un seul outil à la fois » : les appels groupés refusés ne sont
+    // pas des erreurs de skill — on les affiche pour ce qu'ils sont (un refus).
+    const guardrail = ev.guardrail === "one_tool_per_turn" || (ev.result && ev.result.guardrail === "one_tool_per_turn");
     const args = Object.entries(ev.args || {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" · ");
     const ok = ev.result && ev.result.ok !== false;
     return traceCard({
-      summaryHtml: `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b></span> <span class="muted">${esc(args).slice(0, 80)}</span>`,
-      bodyHtml: ok ? "→ " + esc(JSON.stringify(ev.result)).slice(0, 400) : "→ Erreur : " + esc((ev.result || {}).error || "erreur"),
+      summaryHtml: guardrail
+        ? `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b> refusée</span> <span class="muted">garde-fou « un seul outil à la fois »</span>`
+        : `${icon("wrench")}<span>skill <b>${esc(ev.skill)}</b></span> <span class="muted">${esc(args).slice(0, 80)}</span>`,
+      bodyHtml: ok
+        ? "→ " + esc(JSON.stringify(ev.result)).slice(0, 400)
+        : "→ " + (guardrail ? "Garde-fou : " : "Erreur : ") + esc((ev.result || {}).error || "erreur"),
     });
   }
   if (ev.type === "prompt_update") {
