@@ -21,9 +21,34 @@ let convos = [];      // [{id, title, createdAt, updatedAt, messages:[{role, con
 let currentId = null; // null = nouveau chat (non persisté tant que vide)
 let isSending = false;
 
+// Vision : images en attente pour ce message (remis à zéro à chaque envoi,
+// changement de conversation ou nouveau chat). Chaque entrée = data-URL
+// { type:"image_url", image_url:{url} } → envoyé tel quel à l'API. Pas de
+// stockage fichier : tout part en base64 vers le moteur de vision.
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+let pendingImages = [];
+
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const current = () => convos.find((c) => c.id === currentId) || null;
-const apiMessages = (c) => (c ? c.messages.map((m) => ({ role: m.role, content: m.content })) : []);
+/* Vision : extrait le texte d'un contenu (string ou blocs) et les blocs image.
+   `apiMessages` conserve les blocs (le back les envoie au moteur de vision). */
+const textOf = (c) => {
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    return c
+      .filter((b) => b && b.type === "text")
+      .map((b) => String(b.text || ""))
+      .join("\n");
+  }
+  return String(c ?? "");
+};
+const imagesOf = (c) =>
+  Array.isArray(c)
+    ? c.filter((b) => b && b.type === "image_url" && b.image_url)
+    : [];
+const apiMessages = (c) =>
+  c ? c.messages.map((m) => ({ role: m.role, content: m.content })) : [];
 const showTitle = (c) => {
   if (!c) return "Nouveau chat";
   if (c.renamedByUser) return c.title || "Conversation";
@@ -120,6 +145,35 @@ function warnCard(w) {
 function userMsgEl(content) {
   const wrap = document.createElement("div");
   wrap.className = "cmsg user";
+  if (Array.isArray(content)) {
+    const imgs = imagesOf(content);
+    const text = textOf(content).trim();
+    if (imgs.length) {
+      const figs = document.createElement("div");
+      figs.className = "umsg-imgs";
+      for (const blk of imgs) {
+        const img = document.createElement("img");
+        img.src = (blk.image_url && blk.image_url.url) || "";
+        img.alt = "Image jointe au message";
+        img.loading = "lazy";
+        figs.appendChild(img);
+      }
+      wrap.appendChild(figs);
+    }
+    if (text) {
+      const b = document.createElement("div");
+      b.className = "bubble umsg";
+      b.textContent = text;
+      wrap.appendChild(b);
+    }
+    if (!imgs.length && !text) {
+      const b = document.createElement("div");
+      b.className = "bubble umsg";
+      b.textContent = "[image]";
+      wrap.appendChild(b);
+    }
+    return wrap;
+  }
   const b = document.createElement("div");
   b.className = "bubble umsg";
   b.textContent = content; // texte brut (white-space: pre-wrap en CSS)
@@ -305,6 +359,8 @@ function startRename(convo, el, titleEl) {
 function openConvo(id) {
   if (isSending) return;
   currentId = id;
+  pendingImages = [];
+  renderStaged();
   save();
   renderConvoList();
   renderConvo();
@@ -324,6 +380,8 @@ function deleteConvo(id) {
 function newChat() {
   if (isSending) return;
   currentId = null;
+  pendingImages = [];
+  renderStaged();
   save();
   renderConvoList();
   renderConvo();
@@ -333,21 +391,37 @@ function newChat() {
 
 /* ---------- Envoi ---------- */
 async function send(text) {
-  const msg = (text ?? chatInput.value).trim();
-  if (!msg || isSending) return;
+  const raw = text ?? chatInput.value;
+  const msg = String(raw ?? "").trim();
+  const images = pendingImages.slice(0, MAX_IMAGES);
+  if (!msg && !images.length) return;
+  if (isSending) return;
+
   let c = current();
   if (!c) {
     c = { id: uid(), title: "", createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
     convos.unshift(c);
     currentId = c.id;
   }
-  c.messages.push({ role: "user", content: msg });
+
+  // Contenu du tour : texte seul, ou blocs vision (texte + images).
+  // Les données image = data-URL stockés tels quels dans la conversation.
+  const content = images.length
+    ? [
+        ...(msg ? [{ type: "text", text: msg }] : []),
+        ...images.map((u) => ({ type: "image_url", image_url: { url: u } })),
+      ]
+    : msg;
+
+  c.messages.push({ role: "user", content });
   touch(c);
   save();
   chatInput.value = "";
+  pendingImages = [];
+  renderStaged();
   autoresize();
   welcomeEl.style.display = "none";
-  chatLog.appendChild(userMsgEl(msg));
+  chatLog.appendChild(userMsgEl(content));
   scrollBottom();
   renderConvoList();
   renderTitle();
@@ -432,7 +506,7 @@ async function consumeStream(url, body, { onToken, onDone }) {
  */
 async function generateAITitle(msgs) {
   if (!msgs || !msgs.length) return null;
-  const q = msgs.filter((m) => m.role === "user").map((m) => m.content).join("\n");
+  const q = msgs.filter((m) => m.role === "user").map((m) => textOf(m.content)).join("\n");
   try {
     const r = await apiPost("/api/title", {
       messages: [
@@ -582,6 +656,90 @@ async function retestProviders(btn) {
     refreshStatus();
   }
 }
+
+/* ---------- Composer : images (vision) ---------- */
+function imageThumb(dataUrl) {
+  const el = document.createElement("div");
+  el.className = "att";
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.alt = "";
+  const x = document.createElement("button");
+  x.type = "button";
+  x.className = "att-x";
+  x.title = "Retirer l'image";
+  x.setAttribute("aria-label", "Retirer l'image");
+  x.innerHTML = icon("x");
+  x.addEventListener("click", () => {
+    pendingImages = pendingImages.filter((u) => u !== dataUrl);
+    renderStaged();
+  });
+  el.append(img, x);
+  return el;
+}
+
+function renderStaged() {
+  const strip = document.getElementById("image-strip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  strip.hidden = pendingImages.length === 0;
+  for (const u of pendingImages) strip.appendChild(imageThumb(u));
+  const btn = document.getElementById("attach-btn");
+  if (btn) btn.disabled = pendingImages.length >= MAX_IMAGES;
+}
+
+function addImages(files) {
+  if (isSending) { toast("Réponse en cours…", true); return; }
+  const list = Array.from(files || []).slice(0, MAX_IMAGES - pendingImages.length);
+  const rejected = [];
+  let over = 0;
+  let done = 0;
+  const finish = () => {
+    if (rejected.length) toast((over ? "Certaines images dépassent 2 Mo. " : "") + rejected.join(" · "), true);
+    renderStaged();
+  };
+  if (!list.length) { if (files && files.length) toast("Maximum " + MAX_IMAGES + " images par message.", true); return; }
+  for (const f of list) {
+    if (f.size > MAX_IMAGE_BYTES) { over += 1; continue; }
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = String(r.result);
+      if (pendingImages.length < MAX_IMAGES) {
+        pendingImages.push(dataUrl);
+      }
+      done += 1;
+      if (done === list.length - over) finish();
+    };
+    r.onerror = () => { rejected.push(f.name + " illisible"); done += 1; if (done === list.length - over) finish(); };
+    r.readAsDataURL(f);
+  }
+}
+
+const attachBtn = document.getElementById("attach-btn");
+const fileInput = document.getElementById("file-input");
+if (attachBtn && fileInput) {
+  attachBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    addImages(fileInput.files);
+    fileInput.value = "";
+  });
+}
+
+/* Coller une image (capture d'écran ou fichier copié) : elle part en vision. */
+document.addEventListener("paste", (e) => {
+  if (isSending) return;
+  const files = [];
+  for (const item of Array.from(e.clipboardData?.items || [])) {
+    if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (files.length) {
+    e.preventDefault();
+    addImages(files);
+  }
+});
 
 /* ---------- Composer : auto-resize + Entrée/↩ ---------- */
 function autoresize() {

@@ -35,7 +35,13 @@ _lock = threading.Lock()
 def _path(name: str) -> str:
     if name == "research_tasks":
         # Source de vérité unique des tâches de recherche : c'est ce fichier que
-        # le notebook Colab télécharge et exécute (colab/main.py).
+        # le notebook Colab télécharge et exécute (colab/main.py). L'emplacement
+        # est surchargeable via RESEARCH_TASKS_PATH (chemin absolu ou relatif au
+        # repo), utile pour pointer Colab vers un dossier précis.
+        custom = (env("RESEARCH_TASKS_PATH") or "").strip()
+        if custom:
+            p = custom if os.path.isabs(custom) else os.path.join(REPO_ROOT, custom)
+            return p if p.endswith(".json") else os.path.join(p, "tasks.json")
         return os.path.join(REPO_ROOT, "colab", "tasks.json")
     return os.path.join(DATA_DIR, f"{name}.json")
 
@@ -103,13 +109,16 @@ class LocalStore:
 class GitHubStore:
     """Base JSON hébergée dans un repo GitHub privé (API Contents).
 
-    Un fichier par collection : {GITHUB_DIR}/{name}.json — sauf research_tasks
-    qui reste à colab/tasks.json (même convention que le LocalStore, pour que
-    le notebook Colab continue de fonctionner à l'identique).
+    Un fichier par collection : {GITHUB_DIR}/{name}.json — sauf research_tasks,
+    qui vit dans `RESEARCH_TASKS_PATH` du repo (défaut `colab/tasks.json`,
+    même convention que le LocalStore, pour que le notebook Colab tombe sur le
+    même fichier). Toute tâche créée — par l'IA ou par un humain — est donc
+    synchronisée dans le repo de données à cet emplacement.
 
     Config (.env) : GITHUB_TOKEN (fine-grained PAT, Contents lecture+écriture
     sur ce seul repo), GITHUB_REPO (owner/repo), GITHUB_BRANCH (défaut main),
-    GITHUB_DIR (défaut data). Guide complet : docs/GITHUB-BACKEND.md.
+    GITHUB_DIR (défaut data), RESEARCH_TASKS_PATH (défaut colab/tasks.json).
+    Guide complet : docs/GITHUB-BACKEND.md.
 
     Robustesse : lecture avec petit cache TTL (15 s, pour ne pas ralentir
     /api/status qui liste 4 collections), écritures en read-modify-write avec
@@ -142,6 +151,18 @@ class GitHubStore:
 
     def _path(self, name: str) -> str:
         if name == "research_tasks":
+            # Emplacement des tâches dans le repo de données : `research_tasks_path`
+            # est le chemin choisi par l'utilisateur (ex. "colab/tasks.json" ou
+            # "recherche/taches.json"), sinon `colab/tasks.json`. C'est CE fichier
+            # que le notebook Colab constate (les tâches créées par l'IA ou par un
+            # humain y sont écrites) — voir docs/GITHUB-BACKEND.md.
+            custom_path = (env("RESEARCH_TASKS_PATH") or "").strip().strip("/")
+            if custom_path:
+                if custom_path.endswith(".json"):
+                    return custom_path
+                if "/" in custom_path:
+                    return f"{custom_path.rstrip('/')}/research_tasks.json"
+                return f"{custom_path}/research_tasks.json"
             return "colab/tasks.json"
         return f"{self.dir}/{name}.json"
 

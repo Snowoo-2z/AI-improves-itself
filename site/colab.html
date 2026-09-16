@@ -27,16 +27,17 @@
       <h1>Colab — recherche web</h1>
       <p class="sub">
         Quand l'IA a besoin d'informations, elle programme des <b>tâches</b> (skill
-        <code>add_research_task</code>). Deux exécutants : le <b>notebook Colab</b>
-        (script mis à jour par l'IA via ces tâches — « j'ai besoin de vérifier X » → nouvelle tâche dans
-        <code>colab/tasks.json</code>) et le <b>service Chromium</b> déployé sur Render
-        (<code>services/scraper</code>). Les résultats reviennent ici, puis l'IA les étudie.
+        <code>add_research_task</code>). Le <b>notebook Colab</b> (script mis à jour par l'IA via ces tâches —
+        « j'ai besoin de vérifier X » → nouvelle tâche dans <code>colab/tasks.json</code>) les exécute, et les
+        résultats reviennent ici pour que l'IA les étudie. Chaque tâche — créée par l'IA <em>ou</em> par un
+        humain — est aussi synchronisée dans le repo GitHub de données (voir
+        <a href="/docs/GITHUB-BACKEND.md">la doc backend</a>).
       </p>
     </section>
 
     <div class="flow" style="margin-bottom:18px">
       <div class="step"><div class="num">01</div><b>L'IA programme</b><div class="small muted">« Je dois vérifier X » → tâche search/fetch dans la file.</div></div>
-      <div class="step"><div class="num">02</div><b>Exécution</b><div class="small muted">Notebook Colab (<code>colab/main.ipynb</code>) ou web service Chromium (Render).</div></div>
+      <div class="step"><div class="num">02</div><b>Exécution</b><div class="small muted">Notebook Colab (<code>colab/main.ipynb</code>).</div></div>
       <div class="step"><div class="num">03</div><b>Retour & étude</b><div class="small muted">Résultats poussés via <code>POST /api/research/results</code> → l'IA les lit (skill list_research_results).</div></div>
     </div>
 
@@ -79,7 +80,7 @@
     </div>
   </main>
 
-  <footer class="footer">Le scraping honore les robots.txt du site cible. Volume raisonnable : c'est de la recherche, pas du crawl massif.</footer>
+  <footer class="footer">Le fetch honore les robots.txt du site cible. Volume raisonnable : c'est de la recherche, pas du crawl massif.</footer>
 
   <script src="/js/config.js"></script>
   <script src="/js/ui.js"></script>

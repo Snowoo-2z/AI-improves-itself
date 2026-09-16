@@ -18,6 +18,7 @@ from core.skills import manager as skills_manager
 
 from .providers import (
     ProviderResult,
+    _display_text,
     chat_with_failover,
     human_delay,
     next_retry_in,
@@ -43,10 +44,44 @@ _DATE_RULE = (
 )
 
 
+def _textify_content(content) -> str:
+    """"Contenu d'un message → texte plat, même s'il est multimédia (vision)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            t = b.get("type")
+            if t == "text":
+                parts.append(str(b.get("text", "")))
+            elif t == "image_url":
+                img = b.get("image_url") or {}
+                url = str(img.get("url", "")) if isinstance(img, dict) else str(img)
+                parts.append("[image: " + (url[:60] or "sans URL") + "]")
+        text = "\n".join(p for p in parts if p)
+        return text or "[image]"
+    return str(content or "")
+
+
+def _textify_user_messages(messages: list[dict]) -> list[dict]:
+    """En boucle d'outils, les blocs vision sont consommés après le 1er appel :
+    ils sont convertis en texte pour que la suite de l'historique reste valide
+    (le provider ne mémorise pas les images d'un tour à l'autre)."""
+    out: list[dict] = []
+    for m in messages:
+        if m.get("role") == "user" and isinstance(m.get("content"), list):
+            out.append({**{k: v for k, v in m.items() if k != "content"}, "content": _textify_content(m.get("content"))})
+        else:
+            out.append(m)
+    return out
+
+
 def _last_user_text(history: list[dict]) -> str:
     for m in reversed(history):
         if m.get("role") == "user":
-            return str(m.get("content", ""))
+            return _textify_content(m.get("content", ""))
     return ""
 
 
@@ -224,6 +259,15 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
         }
     )
     state["messages"].extend(tool_msgs)
+    # Les blocs vision (image_url) ne traversent PAS la boucle d'outils : après
+    # le 1er appel ils sont remplacés par du texte, pour que l'historique en
+    # mémoire reste valide (le provider ne garde pas les images d'un tour à
+    # l'autre). Le rendu affiché, lui, conserve les images (le front les garde).
+    if any(
+        m.get("role") == "user" and isinstance(m.get("content"), list)
+        for m in state["messages"]
+    ):
+        state["messages"] = _textify_user_messages(state["messages"])
     return True
 
 
@@ -258,10 +302,10 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         provider_name = ""
         model = ""
         for ev in stream_with_failover(state["messages"], state["tools"]):
-            if ev.get("type") == "token":
+            if ev.get("type") == "token" and isinstance(ev.get("content"), str):
                 yield {
                     "type": "token",
-                    "content": ev.get("content", ""),
+                    "content": ev["content"],
                     "provider": ev.get("provider", ""),
                     "model": ev.get("model", ""),
                     "first": first_token,
@@ -292,6 +336,29 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
                 break
             _run_tool_turn(state, result)
             continue
+
+        # --- Tour vision (images dans l'historique) -------------------------
+        # Les modèles vision renvoient parfois un `content` vide (pas de texte)
+        # même pour une vraie réponse visuelle : on reconstitue un texte
+        # affichable, porté par le dernier message utilisateur. Le mode démo ne
+        # peut pas décrire les images → il l'explique honnêtement.
+        if any(
+            m.get("role") == "user" and isinstance(m.get("content"), list)
+            for m in history
+        ):
+            commentary = _last_user_text(history).strip()
+            if state["provider"] == "demo-local":
+                reply = (
+                    "Je suis en mode démo local (aucun moteur configuré) : je ne peux pas "
+                    "voir les images. Renseigne `MISTRAL_API_KEY` dans `.env` pour activer "
+                    "la vision — `ministral-8b-latest` est multimodal."
+                )
+            else:
+                reply = _display_text(result.content, commentary)
+            done = _finalize_done(state, reply, history_n)
+            done.update({"type": "done", "streamed": True})
+            yield done
+            return
 
         # --- Réponse finale -------------------------------------------------
         reply = result.content or "(réponse vide)"
@@ -396,6 +463,21 @@ def handle_chat(history: list[dict]) -> dict:
                 break
             _run_tool_turn(state, result)
             continue
+
+        if any(
+            m.get("role") == "user" and isinstance(m.get("content"), list)
+            for m in history
+        ):
+            commentary = _last_user_text(history).strip()
+            if state["provider"] == "demo-local":
+                reply = (
+                    "Je suis en mode démo local (aucun moteur configuré) : je ne peux pas "
+                    "voir les images. Renseigne `MISTRAL_API_KEY` dans `.env` pour activer "
+                    "la vision — `ministral-8b-latest` est multimodal."
+                )
+            else:
+                reply = _display_text(result.content, commentary)
+            return _finalize_done(state, reply, history_n)
 
         reply = result.content or "(réponse vide)"
         return _finalize_done(state, reply, history_n)

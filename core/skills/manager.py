@@ -79,9 +79,9 @@ SKILLS: list[dict] = [
         "id": "add_research_task",
         "name": "Programmer une tâche de recherche web",
         "description": (
-            "Ajoute une tâche dans la file /colab : kind='fetch' + URL à scraper "
-            "(service Chromium), ou kind='search' + requête (notebook Colab). "
-            "L'exécution est asynchrone ; les résultats reviennent via list_research_results."
+            "Ajoute une tâche dans la file /colab : kind='fetch' + URL, ou "
+            "kind='search' + requête. Le notebook Colab (colab/) l'exécute de façon "
+            "asynchrone ; les résultats reviennent via list_research_results."
         ),
         "parameters": {
             "type": "object",
@@ -96,7 +96,7 @@ SKILLS: list[dict] = [
     {
         "id": "list_research_results",
         "name": "Lire les derniers résultats de recherche",
-        "description": "Retourne les N derniers résultats de recherche (tâches exécutées par Chromium/Colab).",
+        "description": "Retourne les N derniers résultats de recherche (tâches exécutées par le notebook Colab).",
         "parameters": {
             "type": "object",
             "properties": {"limit": {"type": "integer", "description": "Nombre de résultats (défaut 5, max 20)."}},

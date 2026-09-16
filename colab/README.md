@@ -18,9 +18,10 @@ IA (chat)  ──skill add_research_task──▶  tasks.json  (file de tâches)
 ```
 
 - `tasks.json` — la file. Chaque tâche : `{id, kind: search|fetch|note, target, reason, by, status}`.
-  L'IA n'ajoute que des tâches ; elle n'exécute rien elle-même.
+  L'IA n'ajoute que des tâches ; elle n'exécute rien elle-même. En backend GitHub, ce fichier
+  est **synchronisé dans le repo de données** (voir `docs/GITHUB-BACKEND.md` §5).
 - `main.py` — le script. Exécute les tâches `pending` (recherche DuckDuckGo sans clé,
-  fetch + extraction de texte), marquer les `done`/`failed`, sauvegarde incremental.
+  fetch + extraction de texte), marque les `done`/`failed`, sauvegarde incrementale.
 - `main.ipynb` — wrapper Colab (2 cellules : config + exécution).
 - `results.json` — les résultats locaux (poussés aussi au site si `MAIN_SITE_URL` est défini).
 
@@ -35,8 +36,19 @@ IA (chat)  ──skill add_research_task──▶  tasks.json  (file de tâches)
 4. Vérifiez sur la page [/colab](../site/colab.html) du site : les tâches passent `done`,
    les résultats apparaissent, et l'IA peut maintenant les étudier.
 
-## Limites (et pourquoi Render existe aussi)
+## Synchronisation avec le serveur
 
-- Colab : pas de Chromium fiable (rendu JS incomplet) → idéal pour `search` et `fetch` de pages simples (Wikipédia, blogs…).
-- Pour les pages à rendu JS lourd : le service Chromium de `services/scraper` (web service, 2 Go).
-- Les deux exécutants se complètent ; les tâches restent les mêmes.
+- Si `MAIN_SITE_URL` est définie, le script **rapatrie les tâches depuis l'API**
+  (`GET /api/research/tasks`) et les fusionne avec `tasks.json` (par id) — indispensable
+  quand le backend est GitHub (les tâches créées par le chat vivent dans le repo de
+  données, pas dans votre fichier local Colab). Statuts et résultats sont repoussés au site.
+- En local (pas d'URL), le script lit `tasks.json` directement. Si le serveur écrit les
+  tâches ailleurs (variable `RESEARCH_TASKS_PATH`), définissez la même variable en lançant
+  le script pour lire/écrire le même fichier.
+
+## Limites
+
+- Colab : pas de rendu JS → idéal pour `search` (DuckDuckGo) et le `fetch` de pages
+  simples (Wikipédia, blogs…). Les pages à rendu JS lourd ne sont pas supportées.
+- Les sessions Colab sont limitées dans le temps ; les sauvegardes incrementales
+  (`tasks.json`/`results.json` à jour après chaque tâche) évitent les pertes.

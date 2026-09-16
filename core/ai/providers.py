@@ -109,6 +109,33 @@ class ProviderResult:
     model: str = ""
     raw: dict = field(default_factory=dict)
 
+    def with_text(self, text: str) -> "ProviderResult":
+        """Copie avec un `content` texte (hors tool_calls)."""
+        return ProviderResult(
+            content=text,
+            tool_calls=self.tool_calls,
+            provider=self.provider,
+            model=self.model,
+            raw=self.raw,
+        )
+
+
+def _display_text(content: str, commentary: str) -> str:
+    """Compose le texte affiché quand le tour porte des images.
+
+    Un modèle vision ne renvoie parfois AUCUN `content` texte (il enchaîne sur
+    des tokens de « réflexion » ou un tool_call). On reconstitue alors un texte
+    neutre accompagné de la consigne utilisateur, au lieu d'une bulle vide ou
+    d'un faux « (réponse vide) ». Le contenu texte réel est conservé s'il existe.
+    """
+    commentary = commentary.strip()
+    if content.strip():
+        return content
+    if commentary:
+        return f"Traité — réponds à : {commentary[:300]}"
+    return "Traité."
+
+
 
 # ---------------------------------------------------------------------------
 # Classification des erreurs
@@ -562,6 +589,44 @@ class OpenAICompatProvider:
                 return dict(fields)
         return {}
 
+    # -- vision (images) ---------------------------------------------------
+    def _build_messages(self, messages: list[dict]) -> list[dict]:
+        """Normalise les messages avant l'appel : texte OU contenu multimédia.
+
+        Le front peut envoyer des blocs vision* dans `content` :
+
+        - `{role: "user", content: [{type:"text", text}, {type:"image_url",
+           image_url: {url}}]}` → transmis tel quel (les listes de blocs
+           conformes à « OpenAI vision » sont des `text` + 1..N images).
+        - `{role: "user", content: [{type:"image_url", image_url:{url}}]}` →
+          on ajoute un bloc `text` vide, pour que la structure reste valide
+          même sur les modèles qui exigent un bloc texte.
+
+        Tout le reste (texte simple, messages non « user ») passe inchangé.
+        """
+        out: list[dict] = []
+        for m in messages:
+            content = m.get("content")
+            if isinstance(content, list):
+                blocks = [
+                    b for b in content
+                    if isinstance(b, dict) and b.get("type") in ("text", "image_url")
+                ]
+                has_image = any(b.get("type") == "image_url" for b in blocks)
+                has_text = any(b.get("type") == "text" for b in blocks)
+                if has_image:
+                    if not has_text:
+                        # Les modèles vision exigent un bloc texte : on le met en
+                        # TÊTE, en CONSERVANT les images derrière.
+                        blocks = [{"type": "text", "text": "[image]"}, *blocks]
+                    out.append({**{k: v for k, v in m.items() if k != "content"}, "content": blocks})
+                    continue
+                # liste sans image → revenir au texte si possible (défensive).
+                texts = [str(b.get("text", "")) for b in content if b.get("type") == "text"]
+                m = {**{k: v for k, v in m.items() if k != "content"}, "content": "\n".join(texts)}
+            out.append(m)
+        return out
+
     def _payload(
         self,
         messages: list[dict],
@@ -571,7 +636,7 @@ class OpenAICompatProvider:
         *,
         stream: bool = False,
     ) -> dict:
-        body: dict[str, Any] = {"model": model, "messages": messages, "temperature": 0.7}
+        body: dict[str, Any] = {"model": model, "messages": self._build_messages(messages), "temperature": 0.7}
         if tools:
             body["tools"] = tools
         if max_tokens:
@@ -828,8 +893,15 @@ class LocalDemoProvider:
         return None
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ProviderResult:
-        system = next((m["content"] for m in messages if m["role"] == "system"), "")
-        user_texts = [m["content"] for m in messages if m["role"] == "user"]
+        def _txt(c) -> str:
+            if isinstance(c, str):
+                return c
+            if isinstance(c, list):
+                return " ".join(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text")
+            return str(c or "")
+
+        system = next((_txt(m["content"]) for m in messages if m["role"] == "system"), "")
+        user_texts = [_txt(m["content"]) for m in messages if m["role"] == "user"]
         last_user = user_texts[-1] if user_texts else ""
         t = last_user.lower()
         tool_msgs = [m for m in messages if m["role"] == "tool"]
@@ -870,8 +942,8 @@ class LocalDemoProvider:
                 return ProviderResult(
                     content=(
                         f"Tâche de recherche ajoutée (id `{data.get('id')}`, statut "
-                        f"{data.get('status', 'pending')}). Un service Chromium ou le notebook "
-                        "Colab va l'exécuter — tu peux la suivre sur la page **/colab**."
+                        f"{data.get('status', 'pending')}). Le notebook Colab va l'exécuter "
+                        "— tu peux la suivre sur la page **/colab**."
                     ),
                     provider=self.name,
                     model=self.model,

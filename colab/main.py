@@ -27,7 +27,17 @@ import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TASKS_PATH = os.path.join(HERE, "tasks.json")
+# RESEARCH_TASKS_PATH (optionnel) : même variable que le serveur. En local, le
+# backend choisit entre `colab/tasks.json` (défaut) ou un autre chemin ; on la
+# respecte ici pour que le script lise/écrive LE MÊME fichier que le serveur.
+_tasks_env = os.environ.get("RESEARCH_TASKS_PATH", "").strip()
+if _tasks_env:
+    if os.path.isabs(_tasks_env):
+        TASKS_PATH = _tasks_env if _tasks_env.endswith(".json") else os.path.join(_tasks_env, "tasks.json")
+    else:
+        TASKS_PATH = os.path.join(os.path.dirname(HERE), _tasks_env) if _tasks_env.endswith(".json") else os.path.join(os.path.dirname(HERE), _tasks_env, "tasks.json")
+else:
+    TASKS_PATH = os.path.join(HERE, "tasks.json")
 RESULTS_PATH = os.path.join(HERE, "results.json")
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"

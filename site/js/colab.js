@@ -1,4 +1,4 @@
-/* Page Colab — tâches de recherche (Chromium / Colab) + résultats. */
+/* Page Colab — tâches de recherche (notebook Colab) + résultats. */
 "use strict";
 
 async function renderTasks() {
@@ -39,7 +39,7 @@ async function renderResults() {
   const wrap = document.getElementById("results-wrap");
   const items = res.results || [];
   if (!items.length) {
-    wrap.innerHTML = `<div class="muted small">Aucun résultat exécuté pour l'instant (le notebook Colab et le service Chromium alimentent cette liste).</div>`;
+    wrap.innerHTML = `<div class="muted small">Aucun résultat exécuté pour l'instant (le notebook Colab alimente cette liste).</div>`;
     return;
   }
   wrap.innerHTML = items

@@ -4,7 +4,18 @@
   "version": 1,
   "updated_by": "seed",
   "updated_at": 1757808000,
-  "keywords": ["code", "fonction", "bug", "script", "python", "javascript", "api", "docker", "playwright", "uvicorn"],
-  "content": "## Module spécialisé : code\nQuand l'échange porte sur du code :\n- Structure ta réponse : constat, approche, code, points de test.\n- Reste dans l'esprit du projet : mono-repo Python (FastAPI) + site statique HTML/CSS/JS + service Chromium (services/scraper) + notebook Colab (colab/).\n- Signale les risques (sécurité, API, quotas gratuits) et reste sobre : aucun framework lourd sans nécessité.\n- Si une évolution du scraper, du notebook Colab ou du site serait utile, ouvre une requête au dev via `request_to_dev` au lieu d'éditer le code toi-même (l'IA ne modifie pas le code du projet : elle le REQUEST, le dev décide).",
+  "keywords": [
+    "code",
+    "fonction",
+    "bug",
+    "script",
+    "python",
+    "javascript",
+    "api",
+    "docker",
+    "playwright",
+    "uvicorn"
+  ],
+  "content": "## Module spécialisé : code\nQuand l'échange porte sur du code :\n- Structure ta réponse : constat, approche, code, points de test.\n- Reste dans l'esprit du projet : mono-repo Python (FastAPI) + site statique HTML/CSS/JS + notebook Colab (colab/).\n- Signale les risques (sécurité, API, quotas gratuits) et reste sobre : aucun framework lourd sans nécessité.\n- Si une évolution du notebook Colab ou du site serait utile, ouvre une requête au dev via `request_to_dev` au lieu d'éditer le code toi-même (l'IA ne modifie pas le code du projet : elle le REQUEST, le dev décide).",
   "history": []
 }

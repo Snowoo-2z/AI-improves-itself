@@ -2,10 +2,13 @@
 # AI-improves-itself — Render Blueprint
 # https://render.com/docs/blueprint-spec
 #
-# Connecter ce repo sur Render (« New → Blueprint ») crée les
-# 2 services automatiquement :
-#   1. aiis-core    → site statique + API (racine du repo)
-#   2. aiis-scraper → scraping Chromium (services/scraper)
+# Connecter ce repo sur Render (« New → Blueprint ») crée le
+# service automatiquement :
+#   1. aiis-core → site statique + API (racine du repo)
+#
+# (L'ancien service `aiis-scraper` — scraping Chromium via Playwright — a été
+# retiré : il ne servait plus. La recherche s'exécute désormais uniquement via
+# le notebook Colab, et l'IA « voit » les images grâce à la vision de Mistral.)
 #
 # ⚠️ Plans — la seule machine GRATUITE de Render est celle de 512 Mo
 #    (plan `free` : 512 Mo RAM, 0 $/mois). Tout ce qui est ≥ 1 vCPU / 2 Go
@@ -17,8 +20,7 @@
 #       2c-4g       → 4 Go RAM,   2 CPU    85 $/mois
 #    (il n'existe AUCUN palier web à 1 Go : l'échelle passe de 512 Mo à 2 Go ;
 #    « 0.5c-1g » = plan Postgres, 19 $/mois.)
-#    Les deux services restent donc sur `free` (0 $). Pas besoin de payer
-#    pour le moment.
+#    Le service reste donc sur `free` (0 $).
 #    Contraintes du plan `free` (docs.render.com/free) : l'instance s'endort
 #    après 15 min sans requête entrante (~1 min au réveil), le filesystem est
 #    éphémère, pas de disque persistant, pas de SSH, 750 h d'instance gratuites
@@ -29,10 +31,6 @@
 #    que requests / tâches / résultats / knowledge survivent. Les prompts
 #    auto-modifiés restent eux éphémères (reset à la version git à chaque
 #    redéploiement — garde-fou acceptable : l'humain garde le contrôle).
-#    Si Chromium OOM (code 137) sur une page lourde : d'abord réduire
-#    `max_chars`/`wait_ms` côté appel ; en dernier recours passer le scraper en
-#    `1c-2g` (25 $/mois) ou utiliser Oracle Cloud Free Tier (VM ARM toujours
-#    gratuite) — voir docs/ARCHITECTURE.md § 9.
 #
 # ⚠️ Specs (vraies erreurs rencontrées, à ne pas reintroduire) :
 #    - plan : noms valides pour un web service = `free` ou un « compute
@@ -42,12 +40,7 @@
 #      ⚠️ Ne pas laisser `plan` vide : le défaut Blueprint est 0.5c-512mb
 #      (= 7 $/mois), PAS le plan gratuit.
 #    - runtime : requis pour tout service (node / python / docker /
-#      image / static). Un service Dockerfile DOIT déclarer
-#      runtime: docker (pas d'auto-détection dans les Blueprints).
-#    - port : Render injecte son propre port dans la variable d'env PORT.
-#      Le scraper DOIT l'écouter (Dockerfile : `--port ${PORT:-8000}`),
-#      sinon le health-check /health échoue et le service passe en 502.
-#      Le core écoute déjà `$PORT` dans son startCommand.
+#      image / static).
 # ============================================================
 
 services:
@@ -86,35 +79,17 @@ services:
         sync: false
       - key: GITHUB_REPO
         sync: false
+      # --- Emplacement des tâches de recherche dans le repo de données --------
+      # Défaut : colab/tasks.json (le fichier lu par le notebook Colab).
+      # Mettre un autre chemin (ex. "colab/tasks.json" ou "recherche/taches.json")
+      # si tu ranges les tâches ailleurs dans le repo.
+      - key: RESEARCH_TASKS_PATH
+        sync: false
       # --- Supabase (alternative au backend GitHub ; tant que vides → voir STORE_BACKEND) ---
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
-      # --- À remplir APRÈS déploiement de aiis-scraper : son URL publique ---
-      - key: SCRAPER_SERVICE_URL
-        sync: false
       # --- URL publique de CE service (utilisée par le notebook Colab pour renvoyer les résultats) ---
       - key: MAIN_SITE_URL
         sync: false
-
-  # ---------- Scraper Chromium (Playwright headless) ----------
-  # runtime: docker → Render build l'image depuis le Dockerfile de
-  # services/scraper (Playwright + Chromium + dépendances système inclus).
-  - type: web
-    name: aiis-scraper
-    runtime: docker
-    # free = 512 Mo / 0 $ : c'est TENDU pour Chromium (Playwright + une page
-    # lourde peuvent dépasser 512 Mo → OOM code 137). Les flags
-    # --no-sandbox --disable-dev-shm-usage sont déjà dans main.py et limitent
-    # la casse ; garder max_chars/wait_ms modestes côté appel.
-    # Si l'OOM revient : 1c-2g (25 $/mois) ou Oracle Cloud Free Tier.
-    plan: free
-    rootDir: services/scraper
-    healthCheckPath: /health
-    autoDeploy: true
-    envVars:
-      # Optionnel : whitelist de domaines (ex. "wikipedia.org,wikimedia.org").
-      # Vide = tous les domaines autorisés.
-      - key: ALLOWED_DOMAINS
-        value: ""
