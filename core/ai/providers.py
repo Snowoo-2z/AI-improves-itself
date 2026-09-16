@@ -933,11 +933,15 @@ class LocalDemoProvider:
                         provider=self.name,
                         model=self.model,
                     )
-                return ProviderResult(
-                    content="Aucun résultat dans ma base pour cette requête.",
-                    provider=self.name,
-                    model=self.model,
-                )
+                if "openai" in t:
+                    content = (
+                        "Je n'ai aucune entrée vérifiée sur OpenAI dans ma base de connaissances. "
+                        "Je préfère ne pas inventer le modèle le plus récent : une recherche web "
+                        "est nécessaire pour répondre à cette question."
+                    )
+                else:
+                    content = "Aucun résultat dans ma base pour cette requête."
+                return ProviderResult(content=content, provider=self.name, model=self.model)
             if skill == "add_research_task":
                 return ProviderResult(
                     content=(

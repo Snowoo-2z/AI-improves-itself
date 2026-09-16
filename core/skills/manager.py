@@ -26,10 +26,14 @@ SKILLS: list[dict] = [
         "name": "Rechercher dans la base de connaissances",
         "description": (
             "Interroge la base de connaissances du projet (jeux, IA, infra...). "
-            "Retourne jusqu'à 3 entrées. ATTENTION : si l'utilisateur demande le PLUS "
-            "RÉCENT / DERNIER élément d'une catégorie, passe use_date=true pour un tri "
-            "par date décroissante ; sans ça, la base renvoie dans l'ordre d'insertion "
-            "(du plus ancien au plus récent)."
+            "Retourne jusqu'à 3 entrées réellement pertinentes : les sujets explicites "
+            "de la requête doivent être présents, sinon retourne zéro résultat. "
+            "ATTENTION : si l'utilisateur demande le PLUS RÉCENT / DERNIER élément "
+            "d'une catégorie, passe use_date=true pour un tri par date décroissante ; "
+            "sans ça, la base renvoie dans l'ordre d'insertion (du plus ancien au plus récent). "
+            "Tu peux regrouper jusqu'à 3 recherches de lecture seule dans une même réponse "
+            "pour comparer des requêtes, mais ne boucle pas sur cette skill à chaque tour si "
+            "aucune entrée ne correspond : réponds honnêtement ou programme une recherche web."
         ),
         "parameters": {
             "type": "object",
@@ -148,8 +152,56 @@ _registry: dict[str, dict] = {s["id"]: s for s in SKILLS}
 
 # ------------------------------------------------------------- Handlers ----
 def _norm(text: str) -> str:
+    """Normalise un texte de recherche de façon stable (accents compris).
+
+    La recherche est utilisée par des modèles qui reformulent souvent la
+    question : « modèle », « modele » et « modèles » doivent donc être
+    comparables, mais deux sujets distincts comme « modèle » et « OpenAI » ne
+    doivent pas être mélangés.
+    """
     text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
     return re.sub(r"\s+", " ", text).lower().strip()
+
+
+def _search_tokens(text: str) -> list[str]:
+    """Retourne les mots significatifs d'une requête ou d'une entrée."""
+    return re.findall(r"[a-z0-9]+", _norm(text))
+
+
+def _word_forms(word: str) -> set[str]:
+    """Petite tolérance singulier/pluriel sans faire de matching par substring.
+
+    Le matching précédent testait ``mot in texte`` pour chaque mot de la
+    requête. Ainsi « modèle OpenAI » trouvait l'entrée Mistral parce que
+    « modèle » est un préfixe de « modèles », alors que « OpenAI » était
+    absent. Cette tolérance garde les variantes françaises utiles sans rendre
+    un mot absent présent.
+    """
+    forms = {word}
+    if len(word) > 4 and word.endswith("s"):
+        forms.add(word[:-1])
+    elif len(word) > 3 and word.endswith("x"):
+        forms.add(word[:-1])
+    return forms
+
+
+def _term_matches(term: str, tokens: set[str]) -> bool:
+    wanted = _word_forms(term)
+    return any(wanted.intersection(_word_forms(candidate)) for candidate in tokens)
+
+
+# Mots qui décrivent la forme de la demande plutôt que le sujet recherché.
+# Ils ne doivent pas rendre une entrée Mistral pertinente pour une question
+# portant explicitement sur OpenAI, mais ils restent recherchables seuls
+# (par exemple la requête « modèle »).
+_SEARCH_GENERIC_TERMS = {
+    "a", "au", "aux", "avec", "ce", "cette", "d", "dans", "de", "dernier", "derniere",
+    "du", "en", "est", "et", "la", "le", "les", "meilleur", "meilleure", "modele",
+    "modeles", "nouveau", "nouvelle", "plus", "pour", "quel", "quelle", "quels",
+    "quelles", "recent", "recente", "recents", "recentes", "recherche", "sur",
+    "the", "un", "une", "what", "latest", "newest", "recently", "version",
+}
 
 
 def _load_knowledge() -> list[dict]:
@@ -163,21 +215,39 @@ def _load_knowledge() -> list[dict]:
 
 
 def _h_search_knowledge(args: dict) -> dict:
-    query = str(args.get("query", ""))
+    query = str(args.get("query", "")).strip()
     use_date = bool(args.get("use_date", False))
     entries = _load_knowledge()
     if query:
-        q = _norm(query)
-        scored = []
-        for e in entries:
-            hay = _norm(f"{e.get('title','')} {e.get('summary','')} {e.get('category','')}")
-            if q in hay or any(w in hay for w in q.split() if len(w) > 2):
-                scored.append(e)
+        query_terms = _search_tokens(query)
+        # Les termes de sujet (OpenAI, Mistral, Zelda, …) sont obligatoires
+        # quand ils existent. Les termes génériques (« dernier modèle ») ne
+        # doivent pas transformer n'importe quelle entrée de la base en réponse.
+        required_terms = [t for t in query_terms if t not in _SEARCH_GENERIC_TERMS]
+        scored: list[tuple[int, int, int, dict]] = []
+        for index, entry in enumerate(entries):
+            title = str(entry.get("title", ""))
+            haystack = f"{title} {entry.get('summary', '')} {entry.get('category', '')}"
+            tokens = set(_search_tokens(haystack))
+            terms = required_terms or query_terms
+            if not terms or not all(_term_matches(term, tokens) for term in terms):
+                continue
+            # Favoriser le titre et les entrées qui couvrent le plus de mots,
+            # tout en conservant l'ordre d'insertion pour les égalités.
+            title_tokens = set(_search_tokens(title))
+            title_hits = sum(_term_matches(term, title_tokens) for term in terms)
+            score = sum(_term_matches(term, tokens) for term in query_terms)
+            scored.append((title_hits, score, index, entry))
         if scored:
-            entries = scored
-    # BUG INTENTIONNEL & DOCUMENTÉ : sans use_date, l'ordre d'insertion est
-    # conservé (du plus ancien au plus récent) — c'est le défaut que l'IA
-    # découvre et corrige via modify_prompt_system (voir prompts/main.json).
+            scored.sort(key=lambda item: (item[0], item[1], -item[2]), reverse=True)
+            entries = [item[3] for item in scored]
+        else:
+            # Important : une recherche sans résultat reste sans résultat.
+            # L'ancien fallback renvoyait toute la base et le LLM croyait
+            # qu'une entrée partiellement similaire répondait à la question.
+            entries = []
+    # Sans use_date, l'ordre d'insertion est conservé (du plus ancien au plus
+    # récent). Le tri explicite est réservé aux questions « dernier/récent ».
     if use_date:
         entries = sorted(entries, key=lambda e: str(e.get("date") or ""), reverse=True)
     top = entries[:3]

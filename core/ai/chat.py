@@ -31,16 +31,20 @@ MAX_TOOL_ITERATIONS = 6
 #: coupé et l'excédent signalé au dev — l'IA ne peut plus saturer son propre
 #: historique et franchir la fenêtre de contexte (faille de debut).
 TOOL_ITERATION_HARD_LIMIT = 3
-#: Garde-fou « un seul outil à la fois » : une seule réponse du modèle peut
-#: contenir PLUSIEURS tool_calls (appels parallèles) ; exécuter toute la rafale
-#: multiplie les allers-retours LLM, grille le quota des tiers gratuits (429) et
-#: finit par saturer la boucle d'outils — le chat « bloque ». Seul le PREMIER
-#: appel de chaque réponse est exécuté ; les suivants reçoivent un refus
-#: explicite (le protocole OpenAI exige une réponse `tool` par `tool_call.id`,
-#: on ne peut pas simplement les ignorer) qui invite l'IA à rejouer l'outil SEUL
-#: au tour suivant. Les chaînes d'outils restent possibles, simplement
-#: séquentielles — ce que le prompt système impose déjà (voir prompts/main.json).
+#: Garde-fou des appels groupés : les lectures sans effet de bord peuvent être
+#: regroupées pour comparer plusieurs résultats. Les actions d'écriture ou de
+#: modification restent séquentielles afin d'éviter les rafales coûteuses et
+#: les effets de bord. Tout appel refusé reçoit quand même une réponse `tool`
+#: (le protocole OpenAI exige une réponse par `tool_call.id`).
 MAX_PARALLEL_TOOL_CALLS = 1
+#: Les recherches et lectures sont sans effet de bord : plusieurs peuvent être
+#: groupées dans une seule réponse pour comparer des formulations. Les outils
+#: d'écriture restent soumis à MAX_PARALLEL_TOOL_CALLS.
+MAX_PARALLEL_READ_ONLY_CALLS = 3
+READ_ONLY_PARALLEL_SKILLS = {"search_knowledge", "list_research_results"}
+#: Même en séquentiel, on borne une skill par message utilisateur. Cette limite
+#: évite une boucle LLM↔outil sans empêcher quelques recherches complémentaires.
+MAX_TOOL_CALLS_PER_SKILL = 3
 
 _DATE_RULE_MARKER = "[REGLE-AJOUTEE-PAR-IA]"
 _DATE_RULE = (
@@ -130,7 +134,7 @@ def _seed_stores() -> None:
     store_module.get_store().seed_if_empty("research_results", [])
 
 
-def _announce_excess_iterations(last_n: int, max_user: int) -> dict:
+def _announce_excess_iterations(last_user_index: int, iterations: int, max_user: int) -> dict:
     """Garde-fou : le dernier message utilisateur est saturé d'appels d'outils.
 
     On note un `last_user_index` convenu entre le front et le back (le front
@@ -143,7 +147,7 @@ def _announce_excess_iterations(last_n: int, max_user: int) -> dict:
         {
             "title": "[Garde-fou] Boucle d'outils saturée sur le dernier message",
             "description": (
-                f"La boucle LLM↔outils a passé {last_n} tours (limite {max_user}) sur le dernier "
+                f"La boucle LLM↔outils a passé {iterations} tours (limite {max_user}) sur le dernier "
                 "message utilisateur, sans réponse finale. Le message a été coupé et l'historique "
                 "en excès signalé au front (champ `last_user_index` réinjecté dans `messages`). "
                 "À surveiller : une IA qui enchaîne les auto-modifications pourrait masquer un défaut."
@@ -155,7 +159,7 @@ def _announce_excess_iterations(last_n: int, max_user: int) -> dict:
     )
     return {
         "announce_slack": "garde-fou boucle d'outils",
-        "last_user_index": last_n,
+        "last_user_index": last_user_index,
     }
 
 
@@ -195,6 +199,9 @@ def _build_state(history: list[dict]) -> dict:
         "system": system,
         "messages": [{"role": "system", "content": system}, *history],
         "tools": skills_manager.to_openai_tools(),
+        "disabled_tools": set(),
+        "tool_call_signatures": set(),
+        "tool_call_counts": {},
         "events": [],
         "errors": [],
         "error_providers": set(),
@@ -244,6 +251,129 @@ def _parallel_tool_refusal(tc: dict, position: int, kept: str) -> dict:
     }
 
 
+def _parallel_read_limit_refusal(tc: dict, position: int) -> dict:
+    """Refus lisible au-delà du nombre de lectures regroupables."""
+    name = _tool_name(tc)
+    return {
+        "ok": False,
+        "error": (
+            f"Lecture « {name} » refusée en position {position} : maximum "
+            f"{MAX_PARALLEL_READ_ONLY_CALLS} lectures dans une même réponse. "
+            "Synthétise les résultats déjà reçus avant de poursuivre."
+        ),
+        "guardrail": "parallel_read_limit",
+    }
+
+
+def _tool_name(tc: dict) -> str:
+    function = tc.get("function") or {}
+    return str(function.get("name") or "")
+
+
+def _tool_args(tc: dict) -> dict:
+    function = tc.get("function") or {}
+    try:
+        args = json.loads(function.get("arguments") or "{}")
+    except (TypeError, ValueError):
+        args = {}
+    return args if isinstance(args, dict) else {}
+
+
+def _tool_signature(tc: dict) -> str:
+    """Signature stable d'un appel pour détecter les rejoués du modèle."""
+    return json.dumps(
+        {"name": _tool_name(tc), "args": _tool_args(tc)},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _disable_tool(state: dict, name: str) -> None:
+    """Retire un outil devenu inutile pour la suite du même message.
+
+    Le provider reçoit réellement la liste réduite : il ne peut donc pas
+    reformuler à l'infini une recherche vide. Les autres outils restent
+    disponibles (par exemple `add_research_task` pour aller chercher le sujet
+    sur le web).
+    """
+    if not name:
+        return
+    state.setdefault("disabled_tools", set()).add(name)
+    state["tools"] = [
+        tool
+        for tool in state.get("tools", [])
+        if (tool.get("function") or {}).get("name") != name
+    ]
+
+
+def _tool_loop_refusal(name: str, reason: str) -> dict:
+    return {
+        "ok": False,
+        "error": (
+            f"Appel de {name or 'cet outil'} interrompu par le garde-fou anti-boucle : {reason} "
+            "Réponds avec les informations déjà reçues, ou utilise un autre outil utile."
+        ),
+        "guardrail": "tool_loop",
+    }
+
+
+def _read_only_result(result: ProviderResult) -> bool:
+    return bool(result.tool_calls) and all(
+        _tool_name(tc) in READ_ONLY_PARALLEL_SKILLS for tc in result.tool_calls
+    )
+
+
+def _read_only_stretch(state: dict, result: ProviderResult) -> bool:
+    return _read_only_result(result) and all(
+        event.get("skill") in READ_ONLY_PARALLEL_SKILLS
+        for event in state.get("events", [])
+        if event.get("type") == "tool"
+    )
+
+
+def _force_final_read_only_answer(state: dict) -> str | None:
+    """Demande une synthèse sans outils après trop de lectures successives.
+
+    Ce dernier appel ne peut plus relancer une recherche : même un modèle qui
+    ignore la consigne de regroupement doit donc terminer par du texte plutôt
+    que tomber sur le message « trop d'outils » affiché à l'utilisateur.
+    """
+    try:
+        outcome = chat_with_failover(state["messages"], [])
+    except Exception:  # noqa: BLE001 — le garde-fou final ne doit jamais bloquer
+        return None
+    _note_outcome(state, outcome)
+    result = outcome.result
+    state["provider"] = result.provider or outcome.provider.name
+    state["model"] = getattr(result, "model", "") or ""
+    if result.tool_calls:
+        return None
+    return result.content or "(réponse vide)"
+
+
+def _append_refused_tool(state: dict, tool_msgs: list[dict], tc: dict, refusal: dict) -> None:
+    name = _tool_name(tc)
+    args = _tool_args(tc)
+    tool_msgs.append(
+        {
+            "role": "tool",
+            "tool_call_id": tc.get("id", "call-0"),
+            "name": name,
+            "content": json.dumps(refusal, ensure_ascii=False),
+        }
+    )
+    state["events"].append(
+        {
+            "type": "tool",
+            "skill": name,
+            "args": args,
+            "result": refusal,
+            "guardrail": refusal.get("guardrail"),
+        }
+    )
+
+
 def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
     """Exécute les tool_calls d'un résultat et alimente `messages` + `events`.
 
@@ -252,35 +382,51 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
     avant les retours `tool`. Un outil refusé (`ok=False`) reçoit un retour
     d'échec plutôt que rien, pour que l'IA rebondisse au lieu de réitérer.
 
-    Garde-fou « un seul outil à la fois » : seuls les `MAX_PARALLEL_TOOL_CALLS`
-    premiers appels d'une réponse sont exécutés ; les appels groupés suivants
-    reçoivent un refus pédagogique (`_parallel_tool_refusal`) — chaque
-    `tool_call_id` a quand même sa réponse, le protocole reste valide.
+    Garde-fou : une réponse composée uniquement de lectures (`search_knowledge`
+    ou `list_research_results`) peut contenir jusqu'à
+    `MAX_PARALLEL_READ_ONLY_CALLS` appels. Dès qu'une action d'écriture est
+    présente, seuls les `MAX_PARALLEL_TOOL_CALLS` premiers appels sont exécutés ;
+    chaque appel refusé reçoit tout de même une réponse `tool`, protocole
+    OpenAI oblige.
     """
     tool_calls = list(result.tool_calls or [])
-    kept_name = (tool_calls[0].get("function") or {}).get("name", "") if tool_calls else ""
+    kept_name = _tool_name(tool_calls[0]) if tool_calls else ""
+    # Une rafale entièrement composée de lectures est sûre et utile pour
+    # comparer plusieurs requêtes. Dès qu'une écriture est mélangée, on revient
+    # à la règle stricte : une seule action d'état par réponse.
+    read_only_batch = bool(tool_calls) and all(
+        _tool_name(tc) in READ_ONLY_PARALLEL_SKILLS for tc in tool_calls
+    )
     tool_msgs: list[dict] = []
     for position, tc in enumerate(tool_calls, start=1):
-        if position > MAX_PARALLEL_TOOL_CALLS:
-            refusal = _parallel_tool_refusal(tc, position, kept_name)
-            tool_msgs.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.get("id", "call-0"),
-                    "name": tc.get("function", {}).get("name", ""),
-                    "content": json.dumps(refusal, ensure_ascii=False),
-                }
-            )
-            state["events"].append(
-                {
-                    "type": "tool",
-                    "skill": tc.get("function", {}).get("name", ""),
-                    "args": {},
-                    "result": refusal,
-                    "guardrail": "one_tool_per_turn",
-                }
-            )
+        name = _tool_name(tc)
+        args = _tool_args(tc)
+        if read_only_batch and position > MAX_PARALLEL_READ_ONLY_CALLS:
+            refusal = _parallel_read_limit_refusal(tc, position)
+            _append_refused_tool(state, tool_msgs, tc, refusal)
             continue
+        if not read_only_batch and position > MAX_PARALLEL_TOOL_CALLS:
+            refusal = _parallel_tool_refusal(tc, position, kept_name)
+            _append_refused_tool(state, tool_msgs, tc, refusal)
+            continue
+
+        signature = _tool_signature(tc)
+        signatures = state.setdefault("tool_call_signatures", set())
+        counts = state.setdefault("tool_call_counts", {})
+        count = int(counts.get(name, 0))
+        if signature in signatures:
+            refusal = _tool_loop_refusal(name, "cet appel identique a déjà été exécuté")
+            _append_refused_tool(state, tool_msgs, tc, refusal)
+            _disable_tool(state, name)
+            continue
+        if count >= MAX_TOOL_CALLS_PER_SKILL:
+            refusal = _tool_loop_refusal(name, "cette skill a déjà été appelée trop souvent")
+            _append_refused_tool(state, tool_msgs, tc, refusal)
+            _disable_tool(state, name)
+            continue
+
+        signatures.add(signature)
+        counts[name] = count + 1
         tool_state = _tool_message_for(tc)
         if tool_state is None:
             result_ok = {"ok": False, "error": "exécution refusée (skill inconnue ou échec)"}
@@ -288,15 +434,15 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
                 {
                     "role": "tool",
                     "tool_call_id": tc.get("id", "call-0"),
-                    "name": tc.get("function", {}).get("name", ""),
+                    "name": name,
                     "content": json.dumps(result_ok, ensure_ascii=False),
                 }
             )
             state["events"].append(
                 {
                     "type": "tool",
-                    "skill": tc.get("function", {}).get("name", ""),
-                    "args": {},
+                    "skill": name,
+                    "args": args,
                     "result": result_ok,
                 }
             )
@@ -310,6 +456,12 @@ def _run_tool_turn(state: dict, result: ProviderResult) -> bool:
             }
         )
         state["events"].append(tool_state["_event"])
+        # Un résultat vide est une réponse définitive pour cette base locale.
+        # Retirer seulement la recherche laisse encore `add_research_task`
+        # disponible si le modèle comprend qu'il faut consulter le web.
+        tool_result = tool_state["_event"].get("result") or {}
+        if name == "search_knowledge" and not tool_result.get("entries"):
+            _disable_tool(state, name)
     state["messages"].append(
         {
             "role": "assistant",
@@ -392,6 +544,16 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         if result.tool_calls:
             last_user_stretch += 1
             if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
+                if _read_only_stretch(state, result):
+                    forced_reply = _force_final_read_only_answer(state)
+                    if forced_reply is not None:
+                        extra = _announce_excess_iterations(
+                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
+                        )
+                        done = _finalize_done(state, forced_reply, history_n, extra)
+                        done.update({"type": "done", "streamed": True})
+                        yield done
+                        return
                 break
             _run_tool_turn(state, result)
             continue
@@ -427,7 +589,7 @@ def _live_turn(history: list[dict]) -> Iterator[dict]:
         return
 
     # Garde-fou : trop d'outils enchaînés sur le dernier message.
-    extra = _announce_excess_iterations(history_n - 1, TOOL_ITERATION_HARD_LIMIT)
+    extra = _announce_excess_iterations(history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT)
     reply = (
         "J'ai enchaîné trop d'outils (auto-analyse) sans parvenir à une réponse finale : "
         "j'ai signalé cet excès au développeur. Repose ta question, je serai plus concis."
@@ -519,6 +681,13 @@ def handle_chat(history: list[dict]) -> dict:
         if result.tool_calls:
             last_user_stretch += 1
             if last_user_stretch > TOOL_ITERATION_HARD_LIMIT:
+                if _read_only_stretch(state, result):
+                    forced_reply = _force_final_read_only_answer(state)
+                    if forced_reply is not None:
+                        extra = _announce_excess_iterations(
+                            history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT
+                        )
+                        return _finalize_done(state, forced_reply, history_n, extra)
                 break
             _run_tool_turn(state, result)
             continue
@@ -541,7 +710,7 @@ def handle_chat(history: list[dict]) -> dict:
         reply = result.content or "(réponse vide)"
         return _finalize_done(state, reply, history_n)
 
-    extra = _announce_excess_iterations(history_n - 1, TOOL_ITERATION_HARD_LIMIT)
+    extra = _announce_excess_iterations(history_n - 1, last_user_stretch, TOOL_ITERATION_HARD_LIMIT)
     reply = (
         "J'ai enchaîné trop d'outils (auto-analyse) sans parvenir à une réponse finale : "
         "j'ai signalé cet excès au développeur. Repose ta question, je serai plus concis."
