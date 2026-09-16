@@ -44,7 +44,33 @@ else:
 RESULTS_PATH = os.path.join(HERE, "results.json")
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-MAIN_SITE_URL = os.environ.get("MAIN_SITE_URL", "")
+
+#: URL publique du site principal (celle du service Render). C'est le fallback :
+#: sans rien configurer, le script pousse rend/statuts vers CE site. Surchargeable
+#: par la variable d'environnement MAIN_SITE_URL (définie par le notebook) ou par
+#: un fichier local `colab/main_site_url.txt` (gitignoré — pratique en dev pour
+#: pointer vers une instance locale sans modifier le code).
+DEFAULT_MAIN_SITE_URL = "https://aiis-core.onrender.com"
+_LOCAL_URL_FILE = os.path.join(HERE, "main_site_url.txt")
+
+
+def _detect_main_site_url() -> str:
+    """Résout l'URL du site : environnement → fichier local → défaut versionné."""
+    env_url = os.environ.get("MAIN_SITE_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    if os.path.exists(_LOCAL_URL_FILE):
+        try:
+            with open(_LOCAL_URL_FILE, "r", encoding="utf-8") as fh:
+                local = fh.read().strip()
+        except OSError:
+            local = ""
+        if local:
+            return local.rstrip("/")
+    return DEFAULT_MAIN_SITE_URL
+
+
+MAIN_SITE_URL = _detect_main_site_url()
 
 
 # ------------------------------------------------------------ utilitaires ----

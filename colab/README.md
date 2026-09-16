@@ -22,15 +22,19 @@ IA (chat)  ──skill add_research_task──▶  tasks.json  (file de tâches)
   est **synchronisé dans le repo de données** (voir `docs/GITHUB-BACKEND.md` §5).
 - `main.py` — le script. Exécute les tâches `pending` (recherche DuckDuckGo sans clé,
   fetch + extraction de texte), marque les `done`/`failed`, sauvegarde incrementale.
-- `main.ipynb` — wrapper Colab (2 cellules : config + exécution).
-- `results.json` — les résultats locaux (poussés aussi au site si `MAIN_SITE_URL` est défini).
+  L'URL du site est **détectée automatiquement** : variable `MAIN_SITE_URL` → fichier
+  local `colab/main_site_url.txt` (gitignoré) → défaut versionné `https://aiis-core.onrender.com`.
+- `main.ipynb` — wrapper Colab (2 cellules : config + exécution). La cellule de config
+  est **pré-remplie** avec le site déployé.
+- `results.json` — les résultats locaux (poussés au site dès que l'URL est résolue).
 
 ## Utilisation dans Google Colab
 
 1. Sur ce repo GitHub : `colab/main.ipynb` → **File → Open notebook… → Colab**
    (ou créez un notebook vierge et collez `!pip install -q requests` puis le contenu de `main.py`).
-2. Cellule 1 : collez l'URL du site si vous voulez que les résultats remontent automatiquement
-   (`!env MAIN_SITE_URL=https://votre-site.onrender.com`), ou lancez sans (résultats locaux uniquement).
+2. Cellule 1 : l'URL du site est **pré-remplie** (`https://aiis-core.onrender.com`) —
+   les résultats remontent automatiquement. Changez-la si vous déployez le vôtre
+   (ou lancez `urlretrieve`/mode local sans URL pour des résultats locaux uniquement).
 3. **Runtime → Run all**. Chaque exécution consomme de la RAM/temps gratuits Colab ;
    la session a une durée limitée (les sauvegardes incrementales évitent les pertes).
 4. Vérifiez sur la page [/colab](../site/colab.html) du site : les tâches passent `done`,

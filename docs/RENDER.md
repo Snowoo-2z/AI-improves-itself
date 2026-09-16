@@ -149,8 +149,10 @@ Où récupérer les clés :
 
 1. Sur GitHub, ouvre `colab/main.ipynb` → **File → Open notebook… → Colab**
    (ou *Import notebook* depuis un notebook vierge).
-2. Cellule de config : `MAIN_SITE_URL = "https://aiis-core.onrender.com"`
-   (= `MAIN_SITE_URL` du service, §2).
+2. Cellule de config : `MAIN_SITE_URL` est **pré-remplie** avec
+   `https://aiis-core.onrender.com` (= `MAIN_SITE_URL` du service, §2) —
+   rien à changer. Le script la détecte de toute façon automatiquement
+   (env → `colab/main_site_url.txt` → défaut versionné).
 3. **Runtime → Run all** :
    - le script **tire les tâches depuis l'API** (`GET /api/research/tasks`) et les
      fusionne avec `tasks.json` local — c'est comme ça qu'il voit les tâches créées
@@ -163,8 +165,9 @@ Où récupérer les clés :
 > ⏳ Les sessions Colab sont limitées dans le temps (RAM gratuite ~12 h max) :
 > le script sauvegarde de façon incrémentale (`tasks.json`/`results.json` mis à jour
 > après chaque tâche) → rien n'est perdu en cas de coupure.
-> Sans `MAIN_SITE_URL`, le script ne voit que le `tasks.json` local : pense à définir
-> `RESEARCH_TASKS_PATH` (même valeur que le serveur) ou à laisser l'API faire la fusion.
+> `MAIN_SITE_URL` est détectée automatiquement (défaut versionné
+> `https://aiis-core.onrender.com`) — inutile de la configurer, sauf pour pointer
+> une autre instance.
 
 ---
 
@@ -221,8 +224,8 @@ l'échelle des web services est `free` (512 Mo) → `0.5c-512mb` (512 Mo, 7 $) �
 | Site muet en fin de mois, puis retour au 1er du mois | Quota **750 h d'instance gratuites** du workspace épuisé | Laisser le service s'endormir (pas de trafic permanent) ou passer en payant |
 | `aiis-core` 502 après déploiement | Crashe au boot | *Logs* : souvent `ModuleNotFoundError` → vérifier que le commit a bien `requirements.txt` |
 | Image refusée dans le chat | > 2 Mo, plus de 4 images, ou format non image | Réduire l'image (capture d'écran, redimensionner) — le serveur valide avant l'appel LLM |
-| Colab ne voit pas les tâches du chat | `MAIN_SITE_URL` vide dans le notebook (le script ne tire l'API que si elle est définie) | Renseigner `MAIN_SITE_URL` (§5) — sinon seules les tâches du `tasks.json` local sont vues |
-| Colab n'arrive pas à pousser les résultats | `MAIN_SITE_URL` vide ou http (Colab exige https pour certains domaines) | Mettre l'URL `https://…onrender.com` dans la cellule de config du notebook |
+| Colab ne voit pas les tâches du chat | `MAIN_SITE_URL` pointe vers une autre instance ou le notebook est ancien | Vérifier la cellule de config (§5) : elle doit pointer `https://aiis-core.onrender.com` |
+| Colab n'arrive pas à pousser les résultats | `MAIN_SITE_URL` vide ou http (Colab exige https pour certains domaines) | Mettre l'URL `https://…onrender.com` dans la cellule de config du notebook (pré-remplie par défaut) |
 | Render ne voit pas le repo | Repo privé non autorisé | Reconnecter GitHub dans Render en cochant *Private repositories* |
 | Push ne déclenche pas le déploiement | Le Blueprint a été créé sur une **autre branche** | *Settings → Branch* → choisir ta branche, ou merger sur la branche du Blueprint |
 
