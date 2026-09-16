@@ -10,8 +10,11 @@ Mécanique :
    avec `tasks.json` (par id).
 3. Chaque tâche `pending` est exécutée, marquée `done`/`failed` (localement +
    repoussé au site), et un résultat est écrit dans `results.json`.
-4. Les nouveaux résultats sont poussés vers le site : POST /api/research/results —
-   l'IA pourra ensuite les étudier (skill list_research_results).
+4. Les nouveaux résultats sont poussés vers le site : POST /api/research/results.
+   Le site déclenche alors l'étude IA : structuration + vérification (2 appels
+   Mistral), puis écriture dans la base de connaissances si l'entrée est validée.
+   L'IA de chat peut ensuite relire les résultats (skill list_research_results)
+   et ajouter elle-même des entrées (skill add_knowledge).
 
 Exécution en local (hors Colab) :
     pip install requests beautifulsoup4
@@ -27,11 +30,47 @@ import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TASKS_PATH = os.path.join(HERE, "tasks.json")
+# RESEARCH_TASKS_PATH (optionnel) : même variable que le serveur. En local, le
+# backend choisit entre `colab/tasks.json` (défaut) ou un autre chemin ; on la
+# respecte ici pour que le script lise/écrive LE MÊME fichier que le serveur.
+_tasks_env = os.environ.get("RESEARCH_TASKS_PATH", "").strip()
+if _tasks_env:
+    if os.path.isabs(_tasks_env):
+        TASKS_PATH = _tasks_env if _tasks_env.endswith(".json") else os.path.join(_tasks_env, "tasks.json")
+    else:
+        TASKS_PATH = os.path.join(os.path.dirname(HERE), _tasks_env) if _tasks_env.endswith(".json") else os.path.join(os.path.dirname(HERE), _tasks_env, "tasks.json")
+else:
+    TASKS_PATH = os.path.join(HERE, "tasks.json")
 RESULTS_PATH = os.path.join(HERE, "results.json")
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-MAIN_SITE_URL = os.environ.get("MAIN_SITE_URL", "")
+
+#: URL publique du site principal (celle du service Render). C'est le fallback :
+#: sans rien configurer, le script pousse rend/statuts vers CE site. Surchargeable
+#: par la variable d'environnement MAIN_SITE_URL (définie par le notebook) ou par
+#: un fichier local `colab/main_site_url.txt` (gitignoré — pratique en dev pour
+#: pointer vers une instance locale sans modifier le code).
+DEFAULT_MAIN_SITE_URL = "https://aiis-core.onrender.com"
+_LOCAL_URL_FILE = os.path.join(HERE, "main_site_url.txt")
+
+
+def _detect_main_site_url() -> str:
+    """Résout l'URL du site : environnement → fichier local → défaut versionné."""
+    env_url = os.environ.get("MAIN_SITE_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    if os.path.exists(_LOCAL_URL_FILE):
+        try:
+            with open(_LOCAL_URL_FILE, "r", encoding="utf-8") as fh:
+                local = fh.read().strip()
+        except OSError:
+            local = ""
+        if local:
+            return local.rstrip("/")
+    return DEFAULT_MAIN_SITE_URL
+
+
+MAIN_SITE_URL = _detect_main_site_url()
 
 
 # ------------------------------------------------------------ utilitaires ----

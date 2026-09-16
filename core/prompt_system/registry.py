@@ -17,6 +17,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 
 from core.ai.config import REPO_ROOT, env
 
@@ -70,9 +71,31 @@ def select_for_user_input(text: str) -> list[dict]:
     return chosen
 
 
+def current_date_header() -> str:
+    """Date du jour injectée dans le prompt système — l'IA ne la connaît pas.
+
+    Sans elle, un modèle ne sait pas « aujourd'hui » : c'est exactement le défaut
+    historique du projet (question « dernier Zelda » → l'IA a répondu avec le
+    jeu de 1986, incapable de se situer en 2026). Le fuseau suit le serveur.
+    """
+    try:
+        now = datetime.now().astimezone()
+    except Exception:  # noqa: BLE001
+        # datetime.now().astimezone() peut échouer sur un système sans tz local.
+        now = datetime.now()
+    return (
+        "## DATE DU JOUR (aujourd'hui pour toi, ne l'ignore jamais)\n"
+        f"Nous sommes le {now.strftime('%A %d %B %Y')}, "
+        f"{now.strftime('%H:%M')} (fuseau du serveur ; "
+        f"nom système du fuseau : {now.tzinfo or 'inconnu'}). "
+        "Quand une info a une date, compare-la à aujourd'hui : « le plus récent », "
+        "« le dernier » signifient le plus proche de cette date."
+    )
+
+
 def assemble_system_prompt(chosen: list[dict]) -> str:
-    """Assembler le prompt système final (global + modules spécialisés)."""
-    parts: list[str] = []
+    """Assembler le prompt système final (global + modules spécialisés + date)."""
+    parts: list[str] = [current_date_header()]
     for p in chosen:
         header = f"## PROMPT [{p['id']} · {p.get('scope', 'global')} · v{p.get('version', 1)}]"
         parts.append(f"{header}\n{p['content']}")

@@ -17,20 +17,21 @@ Document de référence. Le README décrit le projet ; ce document décrit le **
 │                 ├─► prompt_system/registry.py : assemble le prompt                   │
 │                 │     (garde-fous mots-clés : main + code/recherche…)                │
 │                 ├─► ai/providers.py : Mistral → Gemini → Groq → OpenRouter → démo    │
+│                 │     (+ vision : blocs image_url → `ministral-8b-latest`)           │
 │                 ├─► skills/manager.py : whitelist d'outils (tool calling)            │
-│                 └─► store.py : JSON local  ⇄  Supabase (PostgREST)                   │
+│                 └─► store.py : JSON local  ⇄  GitHub  ⇄  Supabase (PostgREST)        │
 │                                                                                      │
 │  Pas de réflexion : après chaque réponse, défaut détecté →                           │
 │  modify_prompt_system (versionné + historique + notif /request)                      │
-└──────────────┬───────────────────────────────┬───────────────────────────────────────┘
-               │ POST /scrape                  │ POST /api/research/results
-┌──────────────▼──────────────┐   ┌────────────▼──────────────┐
-│ services/scraper (Render)   │   │ colab/ (Google Colab)     │
-│ FastAPI + Playwright/Chromium│  │ main.ipynb → main.py      │
-│ rendu JS, texte de la page  │   │ search (DDG) / fetch      │
-└─────────────────────────────┘   └───────────────────────────┘
+└──────────────┬───────────────────────────────────────────────────────────────────────┘
+               │ POST /api/research/tasks (pull)  ·  POST /api/research/results (push)
+┌──────────────▼──────────────────────┐
+│ colab/ (Google Colab)               │
+│ main.ipynb → main.py                │
+│ search (DDG) / fetch / note         │
+└──────────────┬──────────────────────┘
                └────────────► base de connaissances ◄──────────
-                    core/data/knowledge.json → Supabase (phase 2)
+                    core/data/knowledge.json → GitHub/Supabase (phase 2)
 ```
 
 ## 2. La boucle d'auto-amélioration (cœur du projet)
@@ -49,7 +50,8 @@ utilisateur ──question──► assemble prompt (main + modules par mots-cl�
    PAS DE RÉFLEXION                           ├─ add_research_task (file /colab)
    analyser sa propre réponse                 ├─ request_to_dev (file /request)
               │                                ├─ list_research_results
-    défaut détecté ?                          └─ update_skill_description
+    défaut détecté ?                          ├─ add_knowledge (mémoriser une info)
+              ▼                                └─ update_skill_description
               ▼
    modify_prompt_system (scope, reason, new_content)
               │
@@ -79,7 +81,9 @@ page /prompt (visible, réversible)  └─────────► page /req
 - `scope: "global"` (main) toujours chargé ; les autres sont des **garde-fous** :
   chargés si un mot-clé du `keywords` apparaît dans le message utilisateur
   (`code.json` : code/bug/python/api… ; `recherche.json` : scrape/colab/veille…).
-- Assemblage : `## PROMPT [id · scope · vN]` + contenu, un bloc par module.
+- Assemblage : `## DATE DU JOUR (…)` en tête (l'IA sait « aujourd'hui » ; ce
+  bloc est généré par `registry.current_date_header()`) puis
+  `## PROMPT [id · scope · vN]` + contenu, un bloc par module.
 - **Modifications IA** : skill `modify_prompt_system` → garde-fou sécurité
   (longueur 40–12 000 car, rejet si une clé API détectée y figure) → version++,
   historique (30 dernières) → notification `/request`.
@@ -95,7 +99,8 @@ page /prompt (visible, réversible)  └─────────► page /req
 | `modify_prompt_system` | le cœur : édite son prompt | versionné, historisé, notifié. |
 | `request_to_dev` | ouvre une requête /request | feature/ui/bug/skill/other. |
 | `add_research_task` | programme une tâche /colab | search (requête) / fetch (URL). |
-| `list_research_results` | lit les derniers résultats | exécutés par Colab/Chromium. |
+| `list_research_results` | lit les derniers résultats | exécutés par le notebook Colab. |
+| `add_knowledge` | ajoute une entrée à la base | `{title, category, date, summary, source}` — l'IA mémorise une info vérifiée. |
 | `update_skill_description` | affine la description d'une skill | persistée dans `core/skills/descriptions.json` (reviewable en git). |
 
 Sécurité : whitelist stricte (n'importe quel nom non référencé = refus), arguments
@@ -135,31 +140,57 @@ Clés (toutes optionnelles, offres gratuites) :
 - Groq console : `GROQ_API_KEY`
 - OpenRouter : `OPENROUTER_API_KEY`
 
-## 6. Recherche web (2 exécutants, 1 file)
+## 6. Recherche web (1 exécutant, 1 file)
 
-File unique : `research_tasks` (Supabase ou `core/data/research_tasks.json`).
+File unique : `research_tasks` (Supabase, ou le backend GitHub — dans
+`colab/tasks.json` ou le chemin `RESEARCH_TASKS_PATH` — ou `colab/tasks.json`
+local). Le **scraper Chromium (`services/scraper/`) a été retiré** : il ne
+servait plus, la recherche s'exécute uniquement via le notebook Colab.
 
 | Exécutant | Tâches | Déploiement | Points forts |
 |---|---|---|---|
-| **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples) | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
-| **Chromium** (`services/scraper/`) | `fetch` pages à rendu JS | Render `free` (512 Mo, 0 $, tendu pour Chromium) / Oracle Free / `1c-2g` (2 Go, 25 $/mois) si OOM | rendu complet (Playwright) |
+| **Colab** (`colab/`) | `search` (DuckDuckGo, sans clé), `fetch` (pages simples), `note` | 100 % gratuit, session limitée | RAM gratuite, idéal recherche documentaire |
 
-Flux : IA → tâche `pending` → exécutant → `done` + `research_results` →
-l'IA lit via `list_research_results` → décide (étude, mise à jour de la base).
-Le scraper a une whitelist de domaines optionnelle (`ALLOWED_DOMAINS`) et un
-plafond de caractères ; l'objectif est la **recherche ponctuelle**, pas le crawl.
+Flux : IA → tâche `pending` → Colab → `done` + `research_results` → l'IA lit via
+`list_research_results` → décide (étude, mise à jour de la base).
+
+**Étude des résultats (sur le site)** — `core/research/service.py` :
+quand Colab pousse un résultat (`POST /api/research/results`), le site déclenche
+l'étude **en arrière-plan** (le POST répond immédiatement ; le bilan `study` est
+réécrit sur le résultat, visible sur /colab). Deux appels LLM par résultat, sans
+aucune clé dans Colab :
+1. **structuration** (1er appel) : le brut est transformé en entrée de base
+   `{title, category, date, summary, source}` + une confiance de 0 à 1 ;
+2. **vérification** (2e appel) : pertinence/cohérence/source de l'entrée
+   proposée — `approve=false` ou confiance < 0,55 ⇒ rien n'est écrit.
+Chaque appel reçoit explicitement la **date du jour** (sinon l'IA ne sait pas
+dater une info web). Écriture seulement si les deux passes acceptent et si
+l'entrée n'est pas un doublon (titre/summary identiques).
+Le `fetch` honore les robots.txt de la cible ; l'objectif est la
+**recherche ponctuelle**, pas le crawl.
+
+### Vision (analyse d'images)
+
+Le chat accepte les images (bouton 📎 ou collage) : le front les encode en
+data-URL base64 (max 4 / 2 Mo, aucun stockage serveur) et les envoie dans le
+`content` du message (`{type:"image_url", image_url:{url}}`). Le moteur
+`ministral-8b-latest` (multimodal) les reçoit et les décrit. En mode démo
+(aucune clé), la réponse explique que la vision n'est pas disponible.
 
 ## 7. Base de données
 
-- **Phase 1 (actuel)** : `LocalStore` (JSON dans `core/data/`) — zéro config,
-  `knowledge.json` seedée (Zelda, Mistral, Supabase…).
+- **Phase 1 (actuel)** : `LocalStore` (JSON dans `core/data/`, tâches dans
+  `colab/tasks.json`) — zéro config, `knowledge.json` seedée (Zelda, Mistral,
+  Supabase…).
+- **Backend GitHub** : `GitHubStore` (déjà codé) — un fichier JSON par collection
+  dans un repo GitHub privé, activé par `GITHUB_TOKEN` + `GITHUB_REPO`. Les tâches
+  de recherche y sont **synchronisées** (créées par l'IA ou par un humain), au
+  chemin `RESEARCH_TASKS_PATH` (voir `docs/GITHUB-BACKEND.md` §5).
 - **Phase 2** : `SupabaseStore` (déjà codé, PostgREST minimal, sans SDK) —
   bascule automatique si `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` sont dans `.env`.
   Schéma : `supabase/schema.sql` (prompts, prompt_versions, skills, dev_requests,
   research_tasks, research_results, knowledge + RLS lecture ouverte, écriture via
   clé service).
-- Phase 3 : repo GitHub **privé** comme archive brute des données de recherche
-  (suivant la vision du README).
 
 ## 8. Sécurité & garde-fous humains
 
@@ -172,17 +203,18 @@ plafond de caractères ; l'objectif est la **recherche ponctuelle**, pas le craw
 4. **API** : en l'état, publique en lecture (c'est un site de recherche).
    Écrire demande un `POST` — phase suivante : auth (Supabase Auth) + token pour
    l'écriture des résultats Colab, rate limiting.
-5. **Scraping** : whitelist de domaines optionnelle, plafond de taille, UA honnête,
-   usage ponctuel (robots.txt des cibles).
+5. **Recherche web** : tasks `search`/`fetch` ponctuelles, UA honnête, usage
+   raisonnable (robots.txt des cibles). Les images du chat sont validées (4 max,
+   2 Mo, format image) avant tout appel LLM.
 
 ## 9. Déploiement (100 % gratuit)
 
 | Brique | Où | Coût |
 |---|---|---|
 | Site statique + API (core/) | GitHub Pages (site seul) **ou** un seul web service `free` (Render/Railway/Oracle) pour tout garder ensemble | 0 $ |
-| Base | Supabase free tier | 0 $ |
+| Base | backend GitHub (repo privé, un fichier par collection) **ou** Supabase free tier | 0 $ |
 | Recherche | Google Colab | 0 $ |
-| Scraper Chromium | Render plan `free` (**512 Mo**, la seule machine gratuite ; tendu pour Chromium) **ou** Oracle Cloud Free Tier (ARM) ; `1c-2g` (2 Go) = **25 $/mois** si OOM à répétition | 0 $ **ou** 25 $/mois |
+| Vision | incluse dans l'appel Mistral (`ministral-8b-latest`), aucun service en plus | 0 $ |
 
 > Rappel tarifs Render (vérifié le 2026-09-14 sur render.com/pricing et
 > docs.render.com/compute-plans) : seule la machine **0,1 CPU / 512 Mo** est gratuite
@@ -190,9 +222,8 @@ plafond de caractères ; l'objectif est la **recherche ponctuelle**, pas le craw
 > 85 $/mois — pas de palier web à 1 Go (l'échelle saute de 512 Mo à 2 Go).
 > Fly.io n'a plus de tier gratuit pour les comptes créés après le 7 oct. 2024.
 
-Recommandation v0 : tout tourner sur **Oracle Cloud Free Tier** (VM 4 ARM gratuite) :
-serveur du projet + Chromium au même endroit, zéro coût, et `SCRAPER_SERVICE_URL`
-pointe sur la même VM.
+Recommandation v0 : tout faire tourner sur **Oracle Cloud Free Tier** (VM ARM 4/24 Go
+toujours gratuite) : serveur du projet au même endroit, zéro coût.
 
 ## 10. Extensions prévues
 

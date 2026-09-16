@@ -79,9 +79,9 @@ SKILLS: list[dict] = [
         "id": "add_research_task",
         "name": "Programmer une tâche de recherche web",
         "description": (
-            "Ajoute une tâche dans la file /colab : kind='fetch' + URL à scraper "
-            "(service Chromium), ou kind='search' + requête (notebook Colab). "
-            "L'exécution est asynchrone ; les résultats reviennent via list_research_results."
+            "Ajoute une tâche dans la file /colab : kind='fetch' + URL, ou "
+            "kind='search' + requête. Le notebook Colab (colab/) l'exécute de façon "
+            "asynchrone ; les résultats reviennent via list_research_results."
         ),
         "parameters": {
             "type": "object",
@@ -96,10 +96,31 @@ SKILLS: list[dict] = [
     {
         "id": "list_research_results",
         "name": "Lire les derniers résultats de recherche",
-        "description": "Retourne les N derniers résultats de recherche (tâches exécutées par Chromium/Colab).",
+        "description": "Retourne les N derniers résultats de recherche (tâches exécutées par le notebook Colab).",
         "parameters": {
             "type": "object",
             "properties": {"limit": {"type": "integer", "description": "Nombre de résultats (défaut 5, max 20)."}},
+        },
+    },
+    {
+        "id": "add_knowledge",
+        "name": "Ajouter une entrée dans la base de connaissances",
+        "description": (
+            "Ajoute une entrée à la base de connaissances (page /data) : {title, category, "
+            "date ISO AAAA-MM-JJ, summary, source}. À utiliser quand une info vérifiée "
+            "(issue de list_research_results ou du web) mérite d'être mémorisée durablement. "
+            "Cite toujours la source et la date de récupération."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Titre court de l'entrée."},
+                "category": {"type": "string", "description": "Thème court (ia, web, jeux-vidéo, infra…)."},
+                "date": {"type": "string", "description": "Date du fait (AAAA-MM-JJ), ou date du jour si inconnue."},
+                "summary": {"type": "string", "description": "1 à 3 phrases factuelles et sourcées."},
+                "source": {"type": "string", "description": "URL d'origine ou provenance (ex: colab)."},
+            },
+            "required": ["title", "summary"],
         },
     },
     {
@@ -226,6 +247,32 @@ def _h_list_research_results(args: dict) -> dict:
     return {"results": results[: min(limit, 20)]}
 
 
+_SKILL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _h_add_knowledge(args: dict) -> dict:
+    s = store_module.get_store()
+    title = str(args.get("title", "")).strip()
+    summary = str(args.get("summary", "")).strip()
+    if not title or not summary:
+        return {"ok": False, "error": "title et summary sont requis."}
+    date = str(args.get("date", "")).strip()
+    if not _SKILL_DATE_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    item = s.add(
+        "knowledge",
+        {
+            "title": title[:200],
+            "category": str(args.get("category", "divers")).strip()[:40] or "divers",
+            "date": date,
+            "summary": summary[:1500],
+            "source": str(args.get("source", "ai")).strip()[:500] or "ai",
+            "added_by": "ai",
+        },
+    )
+    return {"ok": True, "id": item.get("id"), "title": item.get("title")}
+
+
 def _h_update_skill_description(args: dict) -> dict:
     skill_id = str(args.get("skill_id", ""))
     new_description = str(args.get("new_description", "")).strip()
@@ -255,6 +302,7 @@ HANDLERS: dict[str, Callable[[dict], dict]] = {
     "request_to_dev": _h_request_to_dev,
     "add_research_task": _h_add_research_task,
     "list_research_results": _h_list_research_results,
+    "add_knowledge": _h_add_knowledge,
     "update_skill_description": _h_update_skill_description,
 }
 

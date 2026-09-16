@@ -10,7 +10,10 @@ Démarrage (depuis la racine du repo) :
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -21,11 +24,12 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi.responses import StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from core import store as store_module  # noqa: E402
-from core.ai.chat import handle_chat  # noqa: E402
+from core.ai.chat import handle_chat, handle_chat_stream  # noqa: E402
 from core.ai.config import env  # noqa: E402
 from core.ai import providers  # noqa: E402
 from core.prompt_system import registry  # noqa: E402
@@ -42,6 +46,77 @@ app = FastAPI(
 )
 
 # ------------------------------------------------------------------ API ----
+# Vision : limites de sécurité des images reçues. Le front les encode en
+# data-URL base64 (pas de stockage ni d'upload de fichier côté serveur) :
+# 2 Mo binaires suffisent pour une photo/capture, sans faire exploser le
+# contexte ni le temps d'appel. Les data-URL ne quittent le serveur que vers
+# les API des providers IA.
+MAX_UPLOAD_IMAGES = 4
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
+MIN_DATA_BYTES = 32  # sol plancher : une vraie image fait au moins quelques octets signés
+
+
+def _image_blocks(message: dict) -> list[dict]:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [b for b in content if isinstance(b, dict) and b.get("type") == "image_url"]
+
+
+def _looks_binary(raw: bytes) -> bool:
+    return b"\x00" in raw or b"\xff" in raw or raw.startswith((b"\x89PNG", b"GIF8"))
+
+
+def _b64_mime(raw: bytes) -> str | None:
+    if raw.startswith((b"\x89PNG", b"GIF8", b"BM", b"RIFF")):
+        return "image/png" if raw.startswith(b"\x89") else "image/gif" if raw.startswith(b"GIF8") else "image/x"
+    return None
+
+
+def _validate_images(messages: list) -> None:
+    """Rejette proprement (400) les images trop grosses / trop nombreuses / sans
+    format, avant le moindre appel LLM. La validation s'applique à tout
+    l'historique : le front renvoie la conversation entière à chaque tour.
+    """
+    total = 0
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        for b in _image_blocks(m):
+            total += 1
+            if total > MAX_UPLOAD_IMAGES:
+                raise HTTPException(400, f"trop d'images : max {MAX_UPLOAD_IMAGES}")
+            img = b.get("image_url")
+            url = img.get("url") if isinstance(img, dict) else img
+            url = str(url or "")
+            if not url:
+                raise HTTPException(400, "image sans URL")
+            if url.startswith(("http://", "https://")):
+                continue
+            if not url.startswith("data:"):
+                raise HTTPException(400, "image invalide : URL http(s) ou data-URL base64 attendue")
+            header, _, payload = url[5:].partition(",")  # « data:… » sans le préfixe
+            header = header.lower()
+            mime = header.split(";", 1)[0]
+            if not payload:
+                raise HTTPException(400, "data-URL vide")
+            if mime and not mime.startswith("image/"):
+                raise HTTPException(400, f"type d'image non supporté : {mime}")
+            if not header.endswith(";base64"):
+                raise HTTPException(400, "seuls les data-URL base64 sont acceptés")
+            try:
+                raw = base64.b64decode(payload, validate=True)
+            except Exception:  # noqa: BLE001
+                raise HTTPException(400, "data-URL base64 invalide")
+            if len(raw) < MIN_DATA_BYTES:
+                raise HTTPException(400, "image vide ou corrompue")
+            if len(raw) > MAX_IMAGE_BYTES:
+                raise HTTPException(400, "image trop lourde : max 2 Mo")
+            # Signature binaire introuvable et MIME absent → inclassable.
+            if not _looks_binary(raw) and _b64_mime(raw) is None and not mime:
+                raise HTTPException(400, "image non reconnue (png, jpg, gif, webp, …)")
+
+
 class ChatRequest(BaseModel):
     messages: list[dict] = Field(..., description="Historique complet [{role, content}]")
 
@@ -147,7 +222,76 @@ def _knowledge_seed() -> list[dict]:
 def chat(req: ChatRequest) -> dict:
     if not req.messages:
         raise HTTPException(400, "messages vide")
+    _validate_images(req.messages)
     return handle_chat(req.messages)
+
+
+def _sse(data: dict) -> str:
+    """Sérialise un événement Serveur-Sent Events (`data:` + JSON)."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+class TitleRequest(BaseModel):
+    messages: list[dict] = Field(..., description="Un seul message utilisateur décrivant ce qu'il faut titrer")
+
+
+@app.post("/api/title")
+def generate_title(req: TitleRequest) -> dict:
+    """Titre court généré par le modèle pour nommer une conversation.
+
+    Best-effort : un seul appel, sans outils, via la chaîne de repli habituelle.
+    Si tout échoue (démo locale / quota), on renvoie un titre vide — le front
+    garde alors le titre provisoire et l'utilisateur pourra toujours renommer.
+    """
+    from core.ai.providers import LocalDemoProvider, chat_with_failover
+
+    # Constructeur minimal : pas de garde-fous par mots-clés, pas de skills.
+    system = (
+        "Tu es un utilitaire de titrage. Réponds UNIQUEMENT par un titre court "
+        "(2 à 6 mots), sans guillemets, sans point final, sans phrase."
+    )
+    messages: list[dict] = [{"role": "system", "content": system}, *req.messages]
+
+    try:
+        outcome = chat_with_failover(messages, None)
+        result = outcome.result
+        raw = (result.content or "").strip()
+        if isinstance(outcome.provider, LocalDemoProvider):
+            raise ValueError("démo locale : pas de titrage réel")
+        title = re.sub(r"^[\"'«]+|[\"'»]+$", "", raw).strip()
+        title = re.split(r"[\n\r]", title)[0].strip(" .—-")
+        if not title or len(title) > 100:
+            raise ValueError("titre vide ou trop long")
+        return {"title": title, "provider": result.provider or outcome.provider.name, "model": getattr(result, "model", "") or ""}
+    except Exception:  # noqa: BLE001 — best-effort, jamais bloquant
+        return {"title": "", "provider": "", "model": ""}
+
+
+@app.post("/api/chat/stream")
+def chat_stream(req: ChatRequest) -> StreamingResponse:
+    """Variante streamée de /api/chat (SSE) — la réponse finale arrive jeton par jeton.
+
+    Format : un événement `token` par delta de texte UNIQUEMENT pour la réponse
+    finale, puis un événement `done` portant le contenu complet + les events
+    (tools/prompt_update) + les warnings.
+    """
+    if not req.messages:
+        raise HTTPException(400, "messages vide")
+    _validate_images(req.messages)
+
+    def _generator():
+        for ev in handle_chat_stream(req.messages):
+            yield _sse(ev)
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/prompt-system")
@@ -229,29 +373,9 @@ def research_results() -> dict:
 
 @app.post("/api/research/results")
 def research_result_add(req: ResearchResult) -> dict:
-    """Point d'entrée utilisé par le notebook Colab (et par le service Chromium)."""
+    """Point d'entrée utilisé par le notebook Colab."""
     item = research.add_result(req.kind, req.data, task_id=req.task_id)
     return {"ok": True, "id": item.get("id")}
-
-
-def _safe_int(value: Any, default: int, lo: int, hi: int) -> int:
-    """Interprète une valeur int tolérante (JSON), bornée à [lo, hi]."""
-    try:
-        v = int(float(value))
-    except (TypeError, ValueError):
-        return default
-    return max(lo, min(hi, v))
-
-
-@app.post("/api/research/scrape")
-def research_scrape(payload: dict) -> dict:
-    """Scraper une URL via le service Chromium (déployé sur Render)."""
-    url = str(payload.get("url", "")).strip()
-    if not url.lower().startswith(("http://", "https://")):
-        raise HTTPException(400, "url invalide")
-    wait_ms = _safe_int(payload.get("wait_ms", 2000), 2000, 0, 15000)
-    max_chars = _safe_int(payload.get("max_chars", 12000), 12000, 200, 60000)
-    return research.scrape_via_service(url, wait_ms, max_chars)
 
 
 @app.get("/api/data/entries")

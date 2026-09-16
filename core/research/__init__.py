@@ -1,1 +1,1 @@
-# core.research — pipeline web (tâches, résultats, client Chromium)
+# core.research — pipeline web (tâches, résultats, notebook Colab)

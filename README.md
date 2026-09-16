@@ -6,8 +6,8 @@
 > et les informations qu'elle connaît ?
 
 Projet à but **recherche** : offres API gratuites (Mistral en priorité, + Gemini/Groq/OpenRouter en
-fallback), hébergement gratuit (site statique + Supabase free tier + Colab gratuit), un service
-Chromium léger (Render `free` 512 Mo ou Oracle Cloud) pour le scraping.
+fallback), hébergement gratuit (site statique + Supabase free tier + Colab gratuit), et la
+**vision** (analyse d'images) par le moteur multimodal `ministral-8b-latest`.
 
 ---
 
@@ -29,14 +29,13 @@ AI-improves-itself/
 │   ├── ai/                   #   multi-fournisseurs + orchestration + pas de réflexion
 │   ├── prompt_system/        #   ★ prompt versionné, modifiable par l'IA, garde-fous mots-clés
 │   ├── skills/               #   les outils de l'IA (whitelist stricte)
-│   ├── research/             #   pipeline recherche (tâches, résultats, client Chromium)
+│   ├── research/             #   pipeline recherche (tâches, résultats, notebook Colab)
 │   └── data/                 #   base locale (JSON) → Supabase en phase 2
 │
-├── services/scraper/         # web service Chromium (Playwright) — Render `free` 512 Mo (2 Go = 25 $/mois)
 ├── colab/                    # notebook + script exécuté dans Google Colab (tâches de recherche)
 ├── supabase/schema.sql       # base de données (phase 2, schéma complet prêt)
 ├── tests/                    # suite sans réseau (bouchons httpx) : repli, 429, quotas, modèles retirés
-├── render.yaml               # blueprint Render : 2 services créés en one-click
+├── render.yaml               # blueprint Render : 1 service créé en one-click
 └── docs/                     # ARCHITECTURE.md · FREE-TIERS.md (offres gratuites vérifiées) · RENDER.md
 ```
 
@@ -46,7 +45,7 @@ AI-improves-itself/
 |---|---|---|
 | **Prompt système** | `core/prompt_system/` | L'IA peut modifier son propre prompt (ex. après une réponse où elle a ignoré une date, elle ajoute elle-même la règle « trier par date quand on demande le plus récent »). Chaque modif = **version + historique + notification /request + garde-fou anti-fuite de clés API**. Les garde-fous par **mots-clés** chargent des modules spécialisés (`code`, `recherche`, …). |
 | **Skills** | `core/skills/` | L'IA peut affiner les **descriptions** de ses skills (auto-amélioration légère). De **nouvelle** skill = code humain : l'IA ouvre une requête sur `/request`. |
-| **Recherche web** | `colab/` + `services/scraper/` | L'IA programme des tâches (`search`/`fetch`) ; le notebook Colab (script mis à jour par les tâches) ou le service Chromium les exécute ; les résultats reviennent au site et l'IA les étudie. |
+| **Recherche web** | `colab/` | L'IA programme des tâches (`search`/`fetch`) ; le notebook Colab (script mis à jour par les tâches) les exécute ; les résultats reviennent au site, qui les **structure puis vérifie** (2 appels IA) avant de les inscrire dans la base de connaissances. |
 | **Base de données** | `core/data/` → `supabase/` | JSON local pour l'instant, schéma Supabase prêt (phase 2), repo GitHub privé prévu pour les données. |
 
 **Démo intégrée sans aucune clé API** : le mode démo reproduit fidèlement l'exemple du README —
@@ -91,20 +90,20 @@ relais (les autres clés = fallback automatique).
   dédié + token fine-grained (Contents lecture/écriture sur ce seul repo) → `GITHUB_TOKEN` +
   `GITHUB_REPO` dans `.env` → 📘 **[docs/GITHUB-BACKEND.md](docs/GITHUB-BACKEND.md)**.
   Le backend actif est visible dans `/api/status` (`store_backend`) et dans la sidebar du chat.
-- **Scraper Chromium** : **`render.yaml`** — sur Render, *New → Blueprint* crée les 2
-  services du projet en one-click, **tous les deux sur le plan `free` (512 Mo, 0 $)** :
-  c'est la seule machine gratuite de Render, tout ce qui est ≥ 2 Go est payant
-  (`1c-2g` = 25 $/mois par service). Voir manuellement : `services/scraper/README.md` →
-  `SCRAPER_SERVICE_URL=https://ton-scraper.onrender.com` dans `.env`.
+- **Render** : **`render.yaml`** — sur Render, *New → Blueprint* crée le service
+  `aiis-core` (site + API) en one-click sur le plan `free` (512 Mo, 0 $), la seule
+  machine gratuite de Render (tout ce qui est ≥ 2 Go est payant : `1c-2g` = 25 $/mois).
   → 📘 **Tutoriel Render détaillé pas-à-pas : [docs/RENDER.md](docs/RENDER.md)**
 - **Colab** : ouvrir `colab/main.ipynb` dans Google Colab → Run all (voir `colab/README.md`).
+- **Vision** : joindre une image (bouton 📎 ou collage) dans le chat — le moteur Mistral
+  `ministral-8b-latest` est multimodal et la décrit. Rien à configurer côté `.env`.
 
 ## 🔒 Garde-fous humains (non négociables)
 
 1. L'IA ne code **jamais** : elle *request* (`/request`), le dev implémente ou rejette.
 2. Chaque auto-modif de prompt est versionnée, visible (`/prompt`), **réversible** par un humain.
 3. Aucune clé API dans le prompt, dans le repo, ni dans les données (filtres à l'écriture).
-4. Whitelist stricte de skills ; scraping limité en volume, whitelist de domaines optionnelle.
+4. Whitelist stricte de skills ; fetch de recherche limité en volume.
 5. Le mode démo est déterministe et 100 % local : rien ne part sur le réseau sans clé configurée.
 
 ## 🗺 Roadmap
@@ -115,13 +114,13 @@ relais (les autres clés = fallback automatique).
 - [x] Catalogue des offres gratuites vérifié ([docs/FREE-TIERS.md](docs/FREE-TIERS.md)) + suite de tests
 - [x] Prompt système versionné + garde-fous mots-clés + auto-modification
 - [x] Skills (search, modify_prompt, request_to_dev, add_research_task, …)
-- [x] Service Chromium (Docker, prêt à déployer) + notebook Colab
+- [x] Notebook Colab (recherche web) + synchronisation GitHub des tâches
+- [x] Vision : analyse d'images via `ministral-8b-latest`
+- [x] Streaming (SSE) des réponses Mistral
 - [x] Schéma Supabase
-- [ ] Brancher `SCRAPER_SERVICE_URL` et tester un vrai scraping end-to-end
 - [ ] Migrer les données vers Supabase (client déjà codé)
 - [ ] Pas de réflexion LLM en mode live (aujourd'hui : l'IA se corrige via sa mission dans le prompt ; v2 : appel dédié d'analyse post-réponse)
 - [ ] Évaluation des auto-modifs (le prompt v2 est-il mieux que v1 ? métriques sur un jeu de questions)
-- [ ] Auth sur le scraper + file d'attente des tâches
 - [ ] Export CSV/JSON de l'historique des prompts (idée de requête déjà dans /request 😉)
 
 ---
