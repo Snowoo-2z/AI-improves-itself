@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import time
+import urllib.parse
 import uuid
 from typing import Any
 
@@ -119,9 +120,30 @@ class LocalStore:
 
     def update(self, name: str, item_id: str, patch: dict) -> dict | None:
         with _lock:
+            if not item_id:
+                # Sans id, on ne cible AUCUNE entrée : le `str(it.get("id"))`
+                # des entrées sans id (seed knowledge.json) vaut "None" et
+                # matchait silencieusement la première d'entre elles.
+                return None
             items = self.list(name)
             for it in items:
                 if str(it.get("id")) == str(item_id):
+                    it.update(patch)
+                    _save(name, items)
+                    return it
+        return None
+
+    def update_first(self, name: str, conds: dict, patch: dict) -> dict | None:
+        """Met à jour la première entrée vérifiant les conditions (miroir
+        d'écriture de `find`). Pour les entrées LÉGACES sans id (seed) qu'on
+        ne peut pas cibler par id : `update_first("knowledge",
+        {"title": "Mistral AI"}, patch)`. Jamais de condition vide."""
+        if not conds:
+            return None
+        with _lock:
+            items = self.list(name)
+            for it in items:
+                if all(str(it.get(k)) == str(v) for k, v in conds.items()):
                     it.update(patch)
                     _save(name, items)
                     return it
@@ -344,8 +366,24 @@ class GitHubStore:
 
     def update(self, name: str, item_id: str, patch: dict) -> dict | None:
         def _patch(items: list):
+            if not item_id:  # idem LocalStore : jamais de cible par absence d'id
+                return items, None
             for it in items:
                 if str(it.get("id")) == str(item_id):
+                    it.update(patch)
+                    return items, it
+            return items, None
+
+        return self._mutate(name, _patch)
+
+    def update_first(self, name: str, conds: dict, patch: dict) -> dict | None:
+        """Miroir d'écriture de `find` (entrées légaces sans id — seed)."""
+        if not conds:
+            return None
+
+        def _patch(items: list):
+            for it in items:
+                if all(str(it.get(k)) == str(v) for k, v in conds.items()):
                     it.update(patch)
                     return items, it
             return items, None
@@ -407,8 +445,27 @@ class SupabaseStore:
         return rows[0] if rows else payload
 
     def update(self, table: str, item_id: str, patch: dict) -> dict | None:
+        if not item_id:  # idem LocalStore : jamais de cible par absence d'id
+            return None
         r = httpx.patch(
             f"{self.base}/{table}?id=eq.{item_id}",
+            headers=self._headers({"Prefer": "return=representation"}),
+            json=patch,
+            timeout=15,
+        )
+        r.raise_for_status()
+        rows = r.json()
+        return rows[0] if rows else None
+
+    def update_first(self, table: str, conds: dict, patch: dict) -> dict | None:
+        """Miroir d'écriture de `find` (entrées légaces sans id — seed)."""
+        if not conds:
+            return None
+        filt = " and ".join(
+            f"{k}=eq.{urllib.parse.quote(str(v), safe='')}" for k, v in conds.items()
+        )
+        r = httpx.patch(
+            f"{self.base}/{table}?{filt}",
             headers=self._headers({"Prefer": "return=representation"}),
             json=patch,
             timeout=15,

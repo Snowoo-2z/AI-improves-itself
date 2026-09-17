@@ -172,6 +172,40 @@ l'entrée n'est pas un doublon (titre/summary identiques).
 Le `fetch` honore les robots.txt de la cible ; l'objectif est la
 **recherche ponctuelle**, pas le crawl.
 
+### Analyseur automatique de discussions (Colab, 1 cellule, Mistral only)
+
+`colab/analyze_discussions.py` (ou `.ipynb`, 1 seule cellule) est le
+complément « utilisateur » du pipeline : il part des **discussions du chat
+stockées dans le localStorage du navigateur** (`aiis.convos.v1`), exportées
+1 à N à la demande (bouton 📤 du site → modale de sélection → ligne base64
+presse-papier, ou snippet console affiché par le script ; le fichier .json
+exporté est téléversable en repli).
+
+Mécanique (pilotage Mistral de bout en bout, clé fournie par l'utilisateur,
+`ministral-8b-latest` par défaut, jamais poussée au site) :
+
+1. **Extraction** (1 appel/discussion) : le modèle liste les affirmations
+   factuelles vérifiables + la requête de recherche optimale pour chacune ;
+2. **Recherche** (sans clé, même cascade que `main.py` v2 : DDG HTML →
+   DDG lite → Wikipédia FR/EN + lecture des top pages, robots.txt honoré) ;
+3. **Vérification** (1 appel/affirmation, ≤ 6/discussion) : verdict sourcé
+   `correcte | incorrecte (corrigée) | inverifiable` ; si invérifiable, le
+   modèle reformule la requête → 1 nouvel essai ;
+4. **Patch de base** (1 appel/discussion) : `add` (info vérifiée absente) /
+   `update` (entrée existante fausse) — dédoublonnage titre/summary et
+   confiance min 0,55 côté script, refaits côté serveur ;
+5. **Push** : `POST /api/data/entries` (endpoint dédié, bilan
+   `added/updated/skipped`) ; repli automatique sur
+   `POST /api/research/results` (kind `note`) si le serveur est encore
+   sur l'ancienne version (404) ;
+6. **Rendu structuré** : rapport console + 3 fichiers (rapport Markdown,
+   JSON complet machine, base après corrections) téléchargés sur Colab.
+
+Garbage-free : la clé est en RAM seule (getpass), expurgée de tous les logs
+et payloads (`redact()`) ; les discussions ne quittent le notebook que vers
+l'API Mistral — jamais vers les moteurs de recherche. Coût ≈ 8 appels max
+/discussion sur le modèle le plus économe du pool gratuit (cf. FREE-TIERS.md).
+
 ### Vision (analyse d'images)
 
 Le chat accepte les images (bouton 📎 ou collage) : le front les encode en
@@ -205,7 +239,12 @@ data-URL base64 (max 4 / 2 Mo, aucun stockage serveur) et les envoie dans le
    jamais renvoyées par l'API.
 4. **API** : en l'état, publique en lecture (c'est un site de recherche).
    Écrire demande un `POST` — phase suivante : auth (Supabase Auth) + token pour
-   l'écriture des résultats Colab, rate limiting.
+   l'écriture des résultats Colab, rate limiting. L'écriture explicite de la base
+   (`POST /api/data/entries`, utilisée par l'analyseur Colab) est bornée : 20
+   entrées max/lot, 5 champs de la base uniquement, dédoublonnage par titre
+   normalisé + summary, entrées vides après nettoyage sautées (jamais de
+   `update` sans id — les entrées légaces sans id du seed sont ciblées par
+   `update_first`, cf. `core/store.py`).
 5. **Recherche web** : tasks `search`/`fetch` ponctuelles, UA honnête, usage
    raisonnable (robots.txt des cibles). Les images du chat sont validées (4 max,
    2 Mo, format image) avant tout appel LLM.
