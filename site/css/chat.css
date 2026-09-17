@@ -415,6 +415,45 @@ body.app .cmsg .bubble.ghost {
 #send-btn .ic { width: 16px; height: 16px; stroke-width: 2.5; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; }
 
+/* ---------- Export discussions → Colab (analyseur automatique) ---------- */
+.export-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.export-modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  width: min(680px, 92vw); max-height: 86vh;
+  display: flex; flex-direction: column; padding: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.export-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.export-head h2 { font-size: 15px; margin: 0; }
+.export-list {
+  overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px; max-height: 44vh; margin: 10px 0;
+}
+.export-row {
+  display: flex; gap: 8px; align-items: center;
+  padding: 7px 8px; border-radius: 6px; cursor: pointer;
+}
+.export-row:hover { background: var(--card-2); }
+.export-row-t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.export-row-m { flex-shrink: 0; }
+.export-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.export-actions .spacer { flex: 1; }
+.export-actions .btn {
+  background: var(--accent); border-color: var(--accent); color: #04110d;
+  font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+}
+.export-actions .btn:hover { filter: brightness(1.08); }
+.export-blob {
+  margin: 10px 0 0; max-height: 140px; overflow: auto;
+  font-size: 11px; line-height: 1.5;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; user-select: all; white-space: pre-wrap; word-break: break-all;
+}
+
 /* ---------- Mobile ---------- */
 @media (max-width: 900px) {
   .sidebar {

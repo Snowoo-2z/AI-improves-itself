@@ -32,7 +32,9 @@ AI-improves-itself/
 │   ├── research/             #   pipeline recherche (tâches, résultats, notebook Colab)
 │   └── data/                 #   base locale (JSON) → Supabase en phase 2
 │
-├── colab/                    # notebook + script exécuté dans Google Colab (tâches de recherche)
+├── colab/                    # scripts Google Colab : main.ipynb (tâches de recherche)
+│                             #   + analyze_discussions (analyseur automatique de
+│                             #   discussions — 1 cellule, clé Mistral de l'utilisateur)
 ├── supabase/schema.sql       # base de données (phase 2, schéma complet prêt)
 ├── tests/                    # suite sans réseau (bouchons httpx) : repli, 429, quotas, modèles retirés
 ├── render.yaml               # blueprint Render : 1 service créé en one-click
@@ -95,6 +97,14 @@ relais (les autres clés = fallback automatique).
   machine gratuite de Render (tout ce qui est ≥ 2 Go est payant : `1c-2g` = 25 $/mois).
   → 📘 **Tutoriel Render détaillé pas-à-pas : [docs/RENDER.md](docs/RENDER.md)**
 - **Colab** : ouvrir `colab/main.ipynb` dans Google Colab → Run all (voir `colab/README.md`).
+- **Analyseur automatique de discussions** : `colab/analyze_discussions.ipynb`
+  (1 cellule, copier-coller ou téléchargement) — avec **sa** clé Mistral,
+  l'utilisateur sélectionne 1 à N de ses discussions (bouton 📤 du site ou
+  console), le script pilote `ministral-8b-latest` : extraction des
+  affirmations, recherches web de vérification (multi-moteurs, sans clé),
+  verdicts sourcés, puis **corrections/ajouts dans la base de connaissances**
+  du site (`POST /api/data/entries`) + rendu structuré (rapport .md, JSON,
+  base après MAJ). → 📘 [colab/README.md](colab/README.md)
 - **Vision** : joindre une image (bouton 📎 ou collage) dans le chat — le moteur Mistral
   `ministral-8b-latest` est multimodal et la décrit. Rien à configurer côté `.env`.
 
@@ -118,6 +128,7 @@ relais (les autres clés = fallback automatique).
 - [x] Vision : analyse d'images via `ministral-8b-latest`
 - [x] Streaming (SSE) des réponses Mistral
 - [x] Schéma Supabase
+- [x] Analyseur automatique de discussions (1 cellule Colab, Mistral only) + écriture explicite de la base (`POST /api/data/entries`)
 - [ ] Migrer les données vers Supabase (client déjà codé)
 - [ ] Pas de réflexion LLM en mode live (aujourd'hui : l'IA se corrige via sa mission dans le prompt ; v2 : appel dédié d'analyse post-réponse)
 - [ ] Évaluation des auto-modifs (le prompt v2 est-il mieux que v1 ? métriques sur un jeu de questions)

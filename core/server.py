@@ -426,6 +426,112 @@ def data_entries() -> dict:
     return {"entries": items, "count": len(items)}
 
 
+class KnowledgeEntry(BaseModel):
+    """Entrée de base de connaissances — UNIQUEMENT les 5 champs de la base
+    (`knowledge.json` / table Supabase `knowledge`) : portabilité des 3
+    backends garantie (aucun champ inconnu à la persistance)."""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    category: str = "divers"
+    date: str = ""
+    summary: str = Field(..., min_length=1, max_length=1500)
+    source: str = "colab-analyseur"
+
+
+class KnowledgeEntriesRequest(BaseModel):
+    entries: list[KnowledgeEntry] = Field(..., min_length=1, max_length=20)
+    updated_by: str = "human"
+    note: str = ""
+
+
+@app.post("/api/data/entries")
+def data_entries_add(req: KnowledgeEntriesRequest) -> dict:
+    """Écriture explicite de la base de connaissances.
+
+    Utilisé par l'analyseur de discussions Colab (`colab/analyze_discussions.py`),
+    qui a déjà fait lui-même les 2 passes (vérification web sourcée + synthèse
+    avec la clé Mistral de l'utilisateur) — ici le serveur applique le patch
+    validé, sans re-consommer de quota LLM :
+
+    - titre identique (normalisé) à une entrée existante → **mise à jour**,
+    - summary identique à une entrée existante → **doublon ignoré**,
+    - sinon → **ajout**.
+
+    Provenance : l'origine vit dans `source` (URL de la preuve ou
+    « colab-analyseur ») + le `updated_by`/`note` renvoyés dans le bilan.
+    Même garde-fou que le pipeline d'étude : l'entrée n'a QUE les 5 champs
+    de la base (titré/résumé obligatoires, date ISO ou nulle, longueurs bornées).
+    """
+    s = store_module.get_store()
+    existing = s.list("knowledge", default=_knowledge_seed())
+    if not isinstance(existing, list):
+        existing = []
+
+    def norm(x: Any) -> str:
+        return " ".join(str(x or "").lower().split())
+
+    added: list[dict] = []
+    updated: list[dict] = []
+    skipped: list[dict] = []
+    for e in req.entries:
+        title = e.title.strip()
+        summary = e.summary.strip()
+        if not title or not summary:
+            # Vide APRÈS nettoyage : on saute l'entrée (un lot entier doit
+            # pouvoir passer — le Colab n'abandonne pas toute la push pour
+            # une entrée mal formée).
+            skipped.append({"title": title or "(titre vide)", "reason": "titre ou summary vide après nettoyage"})
+            continue
+        date = e.date.strip()
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            date = None
+        entry = {
+            "title": title[:200],
+            "category": (e.category.strip()[:40] or "divers"),
+            "date": date,
+            "summary": summary[:1500],
+            "source": (e.source.strip()[:500] or "colab-analyseur"),
+        }
+        match = next((x for x in existing if norm(x.get("title")) == norm(title)), None)
+        if match is not None:
+            # Le titre normalisé identifie l'entrée : on conserve l'orthographe
+            # CANONIQUE existante (un payload « mistral ai » ne réécrit pas
+            # « Mistral AI »).
+            entry["title"] = str(match.get("title"))
+            if norm(match.get("summary")) == norm(summary):
+                skipped.append({"title": title, "reason": "doublon identique (summary déjà en base)"})
+                continue
+            if match.get("id"):
+                updated_item = s.update("knowledge", match.get("id"), entry)
+            else:
+                # Entrée LÉGACE sans id (seed knowledge.json) : ciblée par
+                # titre exact (jamais d'`update(None, …)` — cf. garde-fou store).
+                updated_item = s.update_first("knowledge", {"title": str(match.get("title"))}, entry)
+            stored = updated_item if isinstance(updated_item, dict) else entry
+            match.update(entry)
+            updated.append(stored)
+            continue
+        dup = next(
+            (x for x in existing if norm(x.get("summary")) == norm(summary) and summary), None
+        )
+        if dup is not None:
+            skipped.append({"title": title, "reason": f"summary déjà présent (entrée « {str(dup.get('title'))[:120]} »)"})
+            continue
+        item = s.add("knowledge", entry)
+        stored = {**entry, "id": (item or {}).get("id")}
+        existing.append(stored)
+        added.append(stored)
+    return {
+        "ok": True,
+        "added": added,
+        "updated": updated,
+        "skipped": skipped,
+        "counts": {"added": len(added), "updated": len(updated), "skipped": len(skipped)},
+        "updated_by": req.updated_by[:80],
+        "note": req.note[:500],
+    }
+
+
 # ------------------------------------------------------------- Static ----
 app.mount("/colab-notebook", StaticFiles(directory=COLAB_DIR, html=True), name="colab-notebook")
 app.mount("/", StaticFiles(directory=SITE_DIR, html=True), name="site")
