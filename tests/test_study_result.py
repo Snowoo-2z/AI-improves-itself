@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from unittest import mock
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -25,7 +26,8 @@ if REPO_ROOT not in sys.path:
 from core import store as store_module  # noqa: E402
 from core.ai import providers as P  # noqa: E402
 from core.prompt_system import registry  # noqa: E402
-from core.research import service as service_module  # noqa: E402
+from core.research import service as research_service  # noqa: E402
+from core.research import service as service_module  # noqa: E402 (alias, comme le code produit)
 from core.skills import manager as skills  # noqa: E402
 
 FAILED: list[str] = []
@@ -219,6 +221,117 @@ with mock.patch.object(service_module, "chat_with_failover", side_effect=fp.fail
     out_for = service_module.study_result({"kind": "note", "data": {"content": "x"}, "id": "rf"}, force=True)
 check("force=True passe malgré une confiance basse", out_for.get("status") == "added", json.dumps(out_for))
 
+
+# ------------------------------------------------------------------- 8 : retryable ----
+print("== 8. Bilan d'étude : les échecs transitoires sont marqués retryable ==")
+_s = _install([])
+demo = P.LocalDemoProvider()
+with mock.patch.object(
+    service_module,
+    "chat_with_failover",
+    side_effect=lambda messages, tools=None: P.FailoverOutcome(
+        result=P.ProviderResult(content="", provider="demo-local", model="demo-local"),
+        provider=demo,
+        errors=["mistral: au repos"],
+        attempts=[],
+        fell_back_to_demo=True,
+    ),
+):
+    out_demo = service_module.study_result({"kind": "fetch", "data": {"text": "Anthropic annonce un nouveau modèle."}, "id": "r-demo"})
+check("moteur indisponible → skipped", out_demo.get("status") == "skipped", json.dumps(out_demo))
+check("moteur indisponible → retryable=true", out_demo.get("retryable") is True)
+
+fp_veto = FakeProvider([
+    json.dumps({"ok": True, "title": "Y", "category": "ia", "date": "2026-09-02",
+                "summary": "rumeur.", "source": "?", "confidence": 0.9}),
+    json.dumps({"approve": False, "json": {}, "confidence": 0.1, "issues": "non sourcée"}),
+])
+with mock.patch.object(service_module, "chat_with_failover", side_effect=fp_veto.failover):
+    out_veto = service_module.study_result({"kind": "note", "data": {"content": "rumeur..."}, "id": "r-veto"})
+check("rejet → retryable=false (ré-essayer ne changerait rien)",
+      out_veto.get("status") == "rejected" and not out_veto.get("retryable"), json.dumps(out_veto))
+
+# ------------------------------------------------------------------- 9 : auto-retry ----
+print("== 9. retry_stale_studies : ré-étudie les échecs transitoires (filet anti-perte) ==")
+_s = _install([])
+stale = _s.add("research_results", {"kind": "fetch", "data": {"text": "Anthropic annonce un nouveau modèle."}, "status": "done"})
+_s.update("research_results", stale["id"], {"study": {
+    "status": "skipped", "reason": "moteur d'analyse indisponible", "retryable": True,
+    "retried_at": 0, "retries": 0}})
+not_retry = _s.add("research_results", {"kind": "note", "data": {"content": "x"}, "status": "done"})
+_s.update("research_results", not_retry["id"], {"study": {
+    "status": "rejected", "reason": "rejetée", "retryable": False, "retried_at": 0, "retries": 0}})
+cooled = _s.add("research_results", {"kind": "note", "data": {"content": "y"}, "status": "done"})
+_s.update("research_results", cooled["id"], {"study": {
+    "status": "skipped", "reason": "moteur indisponible", "retryable": True,
+    "retried_at": time.time(), "retries": 0}})
+maxed = _s.add("research_results", {"kind": "note", "data": {"content": "z"}, "status": "done"})
+_s.update("research_results", maxed["id"], {"study": {
+    "status": "error", "reason": "erreur", "retryable": True,
+    "retried_at": 0, "retries": service_module.RETRY_MAX_ATTEMPTS}})
+
+captured: list[str] = []
+def _fake_spawn(item, *, force=False):
+    captured.append(item.get("id"))
+    _s.update("research_results", item.get("id"), {"study": {
+        "status": "added", "entry": {"title": "ré-étudié"}, "retryable": False,
+        "retried_at": time.time(), "retries": 1}})
+
+with mock.patch.object(service_module, "_spawn_study", side_effect=_fake_spawn):
+    n1 = service_module.retry_stale_studies()
+check("une seule ré-étude planifiée (seule la staled hors cooldown)", n1 == 1, f"n={n1} captured={captured}")
+check("le bon résultat a été ré-étudié", captured == [stale["id"]], str(captured))
+check("le cooldown bloque une ré-étude immédiate", service_module.retry_stale_studies() == 0)
+captured.clear()
+# après simulation du cooldown écoulé : le second échec transitoire est repris
+_s.update("research_results", cooled["id"], {"study": {
+    "status": "skipped", "reason": "moteur indisponible", "retryable": True,
+    "retried_at": time.time() - service_module.RETRY_COOLDOWN_S - 1, "retries": 1}})
+with mock.patch.object(service_module, "_spawn_study", side_effect=_fake_spawn):
+    n2 = service_module.retry_stale_studies()
+check("après le cooldown, l'autre échec transitoire est repris", n2 == 1 and captured == [cooled["id"]], f"n={n2} captured={captured}")
+
+# ------------------------------------------------------------------- 10 : push ----
+print("== 10. Un push Colab déclenche la ré-étude des échecs antérieurs ==")
+_s = _install([])
+with mock.patch.object(service_module, "_spawn_study") as spawn, \
+     mock.patch.object(service_module, "retry_stale_studies") as retry:
+    service_module.add_result("note", {"content": "nouveau push"}, task_id=None)
+check("add_result planifie l'étude du nouveau résultat", spawn.call_count == 1, f"{spawn.call_count}")
+check("add_result déclenche retry_stale_studies", retry.call_count == 1, f"{retry.call_count}")
+
+# ------------------------------------------------------------------- 11 : skill ----
+print("== 11. list_research_results : extrait compact, query, tâches en attente ==")
+_s = _install([])
+task_done = _s.add("research_tasks", {"kind": "search", "target": "dernier modèle anthropic",
+                                      "reason": "question utilisateur", "by": "ai", "status": "done"})
+task_pend = _s.add("research_tasks", {"kind": "deep", "target": "état de l'art agents auto-améliorants",
+                                      "reason": "veille", "by": "ai", "status": "pending"})
+r1 = _s.add("research_results", {"kind": "search", "task_id": task_done["id"], "status": "done",
+    "data": {"results": [{"title": "Anthropic annonce Claude Opus 4.5",
+                          "url": "https://www.anthropic.com/news/opus-4-5",
+                          "snippet": "Nouveau modèle de raisonnement."}]}})
+r2 = _s.add("research_results", {"kind": "fetch", "task_id": None, "status": "done",
+    "data": {"text": "Un article sur les jeux vidéo rétro et leurs émulateurs."}})
+
+with mock.patch.object(research_service, "retry_stale_studies"):
+    all_res = skills.execute("list_research_results", {})
+    q_res = skills.execute("list_research_results", {"query": "anthropic"})
+    none_res = skills.execute("list_research_results", {"query": "zzznonexistent"})
+check("les 2 résultats sont listés", all_res.get("count") == 2, json.dumps(all_res.get("count")))
+check("extrait compact (pas le dump data brut)",
+      all("data" not in r for r in all_res["results"]) and
+      any("Claude Opus 4.5" in r.get("excerpt", "") for r in all_res["results"]),
+      json.dumps(all_res["results"][:1])[:200])
+check("la cible de la tâche est rattachée",
+      any(r.get("target") == "dernier modèle anthropic" for r in all_res["results"]))
+check("query : seul le résultat pertinent reste", [r["id"] for r in q_res["results"]] == [r1["id"]],
+      json.dumps(q_res["results"]))
+check("query sans correspondance → vide + note explicite",
+      none_res["results"] == [] and "attente" in none_res.get("note", ""), none_res.get("note", ""))
+check("la tâche en attente est visible (pending_tasks)",
+      any(p["id"] == task_pend["id"] for p in all_res.get("pending_tasks", [])),
+      json.dumps(all_res.get("pending_tasks")))
 
 # ------------------------------------------------------------------- fin ----
 _restore(_SNAP)

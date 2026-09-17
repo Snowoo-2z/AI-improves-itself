@@ -83,46 +83,7 @@ body.side-collapsed .sidebar { margin-left: -273px; }
   background: rgba(10, 14, 18, 0.7); backdrop-filter: blur(10px);
 }
 .chat-topbar .spacer { flex: 1; }
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.thinking-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 5px 11px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-.thinking-toggle:hover {
-  color: var(--text);
-  border-color: rgba(94, 234, 212, 0.4);
-  background: var(--card-2);
-}
-.thinking-toggle.active {
-  color: var(--accent);
-  background: rgba(94, 234, 212, 0.12);
-  border-color: rgba(94, 234, 212, 0.55);
-  box-shadow: 0 0 10px rgba(94, 234, 212, 0.15);
-}
-.thinking-toggle .ic {
-  width: 15px;
-  height: 15px;
-  transition: transform 0.2s ease;
-}
-.thinking-toggle.active .ic {
-  transform: scale(1.05);
-}
+
 
 /* Collapsible Thinking Card */
 .thinking-box {
@@ -162,6 +123,12 @@ body.side-collapsed .sidebar { margin-left: -273px; }
   color: var(--muted);
   font-weight: 400;
   margin-left: 2px;
+}
+.thinking-effort {
+  font-size: 10.5px; font-weight: 500; font-family: inherit;
+  color: var(--accent); border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 10px; padding: 0 7px; margin-left: 2px;
+  white-space: nowrap;
 }
 .thinking-box summary::after {
   content: "▾";
@@ -351,6 +318,59 @@ body.app .cmsg .bubble.ghost {
 .attach-btn:hover { color: var(--accent); background: var(--card); }
 .attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .attach-btn .ic { width: 19px; height: 19px; }
+
+/* Mode Pensée : sélecteur d'effort dans la barre de chat (façon Claude) */
+.thinking-picker { position: relative; flex-shrink: 0; display: flex; align-items: center; }
+.thinking-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: 1px solid transparent; color: var(--muted);
+  font-family: inherit; font-size: 12.5px; font-weight: 500;
+  padding: 5px 8px; border-radius: 16px; cursor: pointer;
+  transition: all 0.15s ease; user-select: none;
+}
+.thinking-toggle:hover { color: var(--text); background: var(--card); border-color: var(--border); }
+.thinking-toggle.active {
+  color: var(--accent);
+  background: rgba(94, 234, 212, 0.1);
+  border-color: rgba(94, 234, 212, 0.4);
+}
+.thinking-toggle .ic { width: 15px; height: 15px; }
+.thinking-toggle .chev { width: 11px; height: 11px; opacity: 0.7; transition: transform 0.15s ease; }
+.thinking-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.thinking-menu {
+  position: absolute; bottom: calc(100% + 10px); left: 0;
+  min-width: 252px; max-width: min(320px, 78vw); z-index: 60;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+.thinking-menu[hidden] { display: none; }
+.thinking-menu-title {
+  font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--muted); padding: 7px 10px 6px;
+}
+.thinking-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  padding: 8px 10px; border-radius: 8px; color: var(--text); font-family: inherit;
+}
+.thinking-opt:hover { background: var(--card-2); }
+.thinking-opt.selected { background: rgba(94, 234, 212, 0.08); }
+.thinking-opt-t {
+  font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px;
+}
+.thinking-opt-t::before {
+  content: ""; width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--border); flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.thinking-opt.selected .thinking-opt-t::before {
+  border-color: var(--accent); background: var(--accent);
+  box-shadow: inset 0 0 0 2.5px var(--bg-2);
+}
+.thinking-opt-d { font-size: 11.5px; color: var(--muted); padding-left: 21px; line-height: 1.35; }
+
 #chat-input {
   flex: 1; background: none; border: none; outline: none; resize: none;
   color: var(--text); font-size: 15px; font-family: inherit; line-height: 1.5;
