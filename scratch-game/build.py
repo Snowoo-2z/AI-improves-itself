@@ -65,7 +65,7 @@ for v, d in [
     ("fxType", "spark"), ("fxX", 0), ("fxY", 0), ("fxTeinte", 0), ("niveauApercu", 0),
     ("gain", 0), ("resultat", ""), ("textW", 0), ("frame", 0), ("BotVitesse", 4), ("BotAggro", 30),
     ("BotGarde", 20), ("BotReaction", 10), ("BotNom", ""), ("P1Vitesse", 4.5), ("comboP1", 0),
-    ("dernierNiveauGagne", 0), ("P1Vis", 0), ("BotVis", 0),
+    ("dernierNiveauGagne", 0), ("P1Vis", 0), ("BotVis", 0), ("codeSauvegarde", ""), ("infoSauvegarde", ""), ("P1HitType", ""), ("BotHitType", ""),
 ]:
     S.add_var(v, d)
 
@@ -90,6 +90,7 @@ S.add_list("skinTeinte", [s[1] for s in SKINS])
 S.add_list("skinLum", [s[2] for s in SKINS])
 S.add_list("skinPrix", [s[3] for s in SKINS])
 S.add_list("skinPossede", [1] + [0] * (len(SKINS) - 1))
+S.add_list("CODE DE SAUVEGARDE", [])
 
 # décors
 for name, svg in assets.backdrops().items():
@@ -158,7 +159,8 @@ add_sounds(ui, ["click", "coin", "win", "lose", "round", "ko"])
 
 # ================================================================== INTERFACE (moteur texte + écrans)
 U = ui
-for v in ["cx", "i", "ch", "prefix", "bx", "by", "bw", "bh", "hover", "k", "ratio", "px", "py", "col", "n"]:
+for v in ["cx", "i", "ch", "prefix", "bx", "by", "bw", "bh", "hover", "k", "ratio", "px", "py", "col", "n",
+          "padded", "bits", "mult", "digits", "part", "somme", "ok"]:
     U.add_var(v, 0)
 
 # --- bloc : rect x y w h couleur transparence  (x = bord gauche, y = centre vertical, coins arrondis)
@@ -300,18 +302,150 @@ def barre(x, y, w, h, ratio, couleur, sens):
     return call("barre %s %s %s %s %s %s %s", x, y, w, h, ratio, couleur, sens)
 
 
+
+# --- sauvegarde : code numérique  N PPPPP AAA SS A S CC  (15 chiffres, affiché par groupes)
+U.script(define("pad %s %s", ["valeur", "longueur"], [
+    set_var("padded", join(arg("valeur"), "")),
+    repeat_until(ge(strlen(var("padded")), arg("longueur")), [set_var("padded", join("0", var("padded")))]),
+]))
+
+U.script(define("extraire %s %s", ["debut", "longueur"], [
+    set_var("part", ""),
+    set_var("i", arg("debut")),
+    repeat(arg("longueur"), [set_var("part", join(var("part"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("part", add(var("part"), 0)),
+]))
+
+U.script(define("checksum %s %s %s %s %s %s", ["a", "b", "c", "d", "e", "f"], [
+    set_var("somme", add(mul(arg("a"), 3), add(mul(arg("b"), 7), add(mul(arg("c"), 11),
+                     add(mul(arg("d"), 13), add(mul(arg("e"), 17), mul(arg("f"), 19))))))),
+    set_var("somme", mod(add(var("somme"), 29), 97)),
+]))
+
+U.script(define("genererCode", [], [
+    # bits accessoires / couleurs possédés
+    set_var("bits", 0), set_var("mult", 1), set_var("k", 1),
+    repeat(len(ACCS), [
+        if_(eq(item("accPossede", var("k")), 1), [change_var("bits", var("mult"))]),
+        set_var("mult", mul(var("mult"), 2)), change_var("k", 1),
+    ]),
+    set_var("px", var("bits")),
+    set_var("bits", 0), set_var("mult", 1), set_var("k", 1),
+    repeat(len(SKINS), [
+        if_(eq(item("skinPossede", var("k")), 1), [change_var("bits", var("mult"))]),
+        set_var("mult", mul(var("mult"), 2)), change_var("k", 1),
+    ]),
+    set_var("py", var("bits")),
+    # index accessoire équipé
+    set_var("n", 1), set_var("k", 1),
+    repeat(len(ACCS), [if_(eq(item("accId", var("k")), var("P1Acc")), [set_var("n", var("k"))]), change_var("k", 1)]),
+    if_(gt(var("pieces"), 99999), [set_var("pieces", 99999)]),
+    call("checksum %s %s %s %s %s %s", var("niveauMax"), var("pieces"), var("px"), var("py"), var("n"), var("P1Skin")),
+    set_var("codeSauvegarde", var("niveauMax")),
+    call("pad %s %s", var("pieces"), 5), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
+    call("pad %s %s", var("px"), 3), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
+    call("pad %s %s", var("py"), 2), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), join(var("n"), var("P1Skin")))),
+    call("pad %s %s", var("somme"), 2), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
+    # groupes lisibles : 1-5-3-2-2-2
+    set_var("digits", var("codeSauvegarde")),
+    set_var("codeSauvegarde", join(letter(1, var("digits")), "-")),
+    set_var("i", 2), repeat(5, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
+    repeat(3, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
+    repeat(2, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
+    repeat(2, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
+    repeat(2, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    list_clear("CODE DE SAUVEGARDE"),
+    list_add("CODE DE SAUVEGARDE", var("codeSauvegarde")),
+]))
+
+U.script(define("chargerCode %s", ["code"], [
+    # ne garder que les chiffres
+    set_var("digits", ""), set_var("i", 1),
+    repeat(strlen(arg("code")), [
+        set_var("ch", letter(var("i"), arg("code"))),
+        if_(Blk("operator_contains", {"STRING1": "0123456789", "STRING2": var("ch")}), [set_var("digits", join(var("digits"), var("ch")))]),
+        change_var("i", 1),
+    ]),
+    set_var("ok", 0),
+    if_(eq(strlen(var("digits")), 15), [
+        call("extraire %s %s", 1, 1), set_var("bx", var("part")),      # niveauMax
+        call("extraire %s %s", 2, 5), set_var("by", var("part")),      # pièces
+        call("extraire %s %s", 7, 3), set_var("px", var("part")),      # bits acc
+        call("extraire %s %s", 10, 2), set_var("py", var("part")),     # bits skins
+        call("extraire %s %s", 12, 1), set_var("n", var("part")),      # acc équipé
+        call("extraire %s %s", 13, 1), set_var("k", var("part")),      # skin équipé
+        call("extraire %s %s", 14, 2), set_var("cx", var("part")),     # checksum
+        call("checksum %s %s %s %s %s %s", var("bx"), var("by"), var("px"), var("py"), var("n"), var("k")),
+        if_(and_(eq(var("somme"), var("cx")), and_(and_(gt(var("bx"), 0), lt(var("bx"), len(BOTS) + 1)),
+                                                    and_(and_(gt(var("n"), 0), lt(var("n"), len(ACCS) + 1)),
+                                                         and_(gt(var("k"), 0), lt(var("k"), len(SKINS) + 1))))), [
+            set_var("ok", 1),
+            set_var("niveauMax", var("bx")), set_var("pieces", var("by")),
+            set_var("mult", 1), set_var("i", 1),
+            repeat(len(ACCS), [
+                list_replace("accPossede", var("i"), mod(floor(div(var("px"), var("mult"))), 2)),
+                set_var("mult", mul(var("mult"), 2)), change_var("i", 1),
+            ]),
+            set_var("mult", 1), set_var("i", 1),
+            repeat(len(SKINS), [
+                list_replace("skinPossede", var("i"), mod(floor(div(var("py"), var("mult"))), 2)),
+                set_var("mult", mul(var("mult"), 2)), change_var("i", 1),
+            ]),
+            list_replace("accPossede", 1, 1), list_replace("skinPossede", 1, 1),
+            set_var("P1Acc", item("accId", var("n"))),
+            set_var("P1Skin", var("k")),
+            set_var("P1Teinte", item("skinTeinte", var("P1Skin"))),
+            set_var("P1Lum", item("skinLum", var("P1Skin"))),
+            set_var("niveau", var("niveauMax")),
+        ]),
+    ]),
+    if_else(eq(var("ok"), 1), [
+        set_var("infoSauvegarde", "Progression chargée !"), play_sound("coin"),
+    ], [
+        set_var("infoSauvegarde", "Code invalide"), play_sound("lose"),
+    ]),
+    set_var("phaseTimer", 90),
+]))
+
+# --- écran SAUVEGARDE
+U.script(define("dessinerSauvegarde", [], [
+    rect(-200, 10, 400, 260, COL["panel"], 15),
+    ecrire("TON CODE DE SAUVEGARDE", 0, 100, 60, 30, 1),
+    rect(-185, 40, 370, 56, "#000000", 30),
+    ecrire(var("codeSauvegarde"), 0, 28, 62, -1, 1),
+    ecrire("Note ce code (ou copie-le dans la liste à l'écran).", 0, -10, 30, -1, 1),
+    ecrire("Au prochain lancement : Menu, CHARGER, puis colle le code.", 0, -32, 30, -1, 1),
+    ecrire("Il contient : niveau max, pièces, cosmétiques achetés et équipés.", 0, -60, 26, -2, 1),
+    bouton(0, -110, 160, 40, "RETOUR", "menu", COL["grey"], 42),
+]))
+
 # --- écran MENU
 U.script(define("dessinerMenu", [], [
     rect(-240, 120, 480, 70, "#000000", 55),
     ecrire("ARENA CLASH", 3, 97, 115, -3, 1),
     ecrire("ARENA CLASH", 0, 100, 115, 178, 1),
     ecrire("Combat 2D - Arène - Bots - Cosmétiques", 0, 62, 36, -2, 1),
-    bouton(80, 20, 200, 44, "JOUER", "jouer", COL["accent"], 50),
-    bouton(80, -36, 200, 44, "BOUTIQUE", "boutique", COL["accent2"], 50),
-    bouton(80, -92, 200, 44, "COMMANDES", "commandes", COL["grey"], 50),
+    bouton(80, 30, 200, 42, "JOUER", "jouer", COL["accent"], 50),
+    bouton(80, -18, 200, 42, "BOUTIQUE", "boutique", COL["accent2"], 50),
+    bouton(80, -66, 200, 42, "COMMANDES", "commandes", COL["grey"], 50),
+    bouton(28, -112, 100, 34, "SAUVER", "sauver", COL["ok"], 32),
+    bouton(134, -112, 100, 34, "CHARGER", "charger", COL["sp"], 32),
+    if_(gt(var("phaseTimer"), 0), [
+        change_var("phaseTimer", -1),
+        if_else(eq(var("infoSauvegarde"), "Code invalide"), [
+            ecrire(var("infoSauvegarde"), 80, -156, 30, 0, 1),
+        ], [
+            ecrire(var("infoSauvegarde"), 80, -156, 30, 67, 1),
+        ]),
+    ]),
     rect(-240, -150, 480, 40, "#000000", 40),
     ecrire(join(var("pieces"), " pièces"), -228, -156, 40, 30, 0),
-    ecrire(join("Niveau max : ", var("niveauMax")), 228, -156, 40, -1, 2),
+    if_(eq(var("phaseTimer"), 0), [ecrire(join("Niveau max : ", var("niveauMax")), 228, -156, 40, -1, 2)]),
     ecrire("Ton combattant", -150, -128, 32, -2, 1),
 ]))
 
@@ -320,12 +454,13 @@ U.script(define("dessinerCommandes", [], [
     rect(-200, 0, 400, 300, COL["panel"], 15),
     ecrire("COMMANDES", 0, 105, 80, 30, 1),
     ecrire("Flèches gauche / droite : se déplacer", 0, 60, 40, -1, 1),
-    ecrire("Flèche haut : sauter", 0, 32, 40, -1, 1),
-    ecrire("Flèche bas : garde (bloque les coups)", 0, 4, 40, -1, 1),
-    ecrire("J : coup de poing (rapide)", 0, -24, 40, 100, 1),
-    ecrire("K : coup de pied (puissant)", 0, -52, 40, 100, 1),
-    ecrire("L : SPÉCIAL quand la barre bleue est pleine", 0, -80, 40, 30, 1),
-    ecrire("Gagne 2 rounds sur 3 pour remporter le combat !", 0, -112, 34, -2, 1),
+    ecrire("Flèche haut : sauter (on peut attaquer en l'air)", 0, 32, 34, -1, 1),
+    ecrire("Flèche bas : garde. En l'air : recul, résiste au poing,", 0, 6, 32, -1, 1),
+    ecrire("mais se brise sur un coup de pied (moitié des dégâts)", 0, -12, 28, -2, 1),
+    ecrire("J : coup de poing (rapide)", 0, -38, 38, 100, 1),
+    ecrire("K : coup de pied (puissant, brise la garde aérienne)", 0, -64, 36, 100, 1),
+    ecrire("L : SPÉCIAL quand la barre bleue est pleine", 0, -90, 38, 30, 1),
+    ecrire("Gagne 2 rounds sur 3 pour remporter le combat !", 0, -116, 30, -2, 1),
     bouton(0, -150, 160, 40, "RETOUR", "menu", COL["grey"], 42),
 ]))
 
@@ -447,7 +582,7 @@ hud = [
         ecrire(var("message"), 0, 30, 90, 30, 1),
     ]),
     if_(and_(eq(var("phase"), "intro"), eq(var("round"), 1)), [
-        ecrire("Flèches : bouger / sauter / garde   J : poing   K : pied   L : spécial", 0, -160, 28, -2, 1),
+        ecrire("Flèches : bouger / sauter / garde   J : poing   K : pied   L : spécial   (aussi en l'air !)", 0, -160, 26, -2, 1),
     ]),
     if_(gt(var("flash"), 0), [
         rect(-260, 0, 520, 400, "#ffffff", sub(100, mul(var("flash"), 12))),
@@ -515,7 +650,18 @@ click_logic = [
     if_(eq(var("clic"), "jouer"), [set_var("scene", "select"), set_var("niveauApercu", 0)]),
     if_(eq(var("clic"), "boutique"), [set_var("scene", "shop")]),
     if_(eq(var("clic"), "commandes"), [set_var("scene", "commandes")]),
-    if_(eq(var("clic"), "menu"), [set_var("scene", "menu"), switch_backdrop("menu"), broadcast("resetRound")]),
+    if_(eq(var("clic"), "sauver"), [
+        call("genererCode"), set_var("scene", "save"),
+        Blk("data_showlist", fields={"LIST": ListRef("CODE DE SAUVEGARDE")}),
+    ]),
+    if_(eq(var("clic"), "charger"), [
+        Blk("sensing_askandwait", {"QUESTION": "Colle ton code de sauvegarde puis appuie sur Entrée :"}),
+        call("chargerCode %s", Blk("sensing_answer")),
+    ]),
+    if_(eq(var("clic"), "menu"), [
+        set_var("scene", "menu"), switch_backdrop("menu"), broadcast("resetRound"), set_var("phaseTimer", 0),
+        Blk("data_hidelist", fields={"LIST": ListRef("CODE DE SAUVEGARDE")}),
+    ]),
     if_(eq(var("clic"), "rejouer"), [call("lancerCombat")]),
     if_(eq(var("clic"), "suivant"), [change_var("niveau", 1), call("lancerCombat")]),
     # niveaux
@@ -632,6 +778,8 @@ U.script(
     set_var("P1Teinte", item("skinTeinte", var("P1Skin"))),
     set_var("P1Lum", item("skinLum", var("P1Skin"))),
     switch_backdrop("menu"),
+    Blk("data_hidelist", fields={"LIST": ListRef("CODE DE SAUVEGARDE")}),
+    set_var("phaseTimer", 0),
     pen_clear(),
     forever([
         change_var("frame", 1),
@@ -639,6 +787,7 @@ U.script(
         set_var("hoverBtn", ""),
         if_(eq(var("scene"), "menu"), [call("dessinerMenu")]),
         if_(eq(var("scene"), "commandes"), [call("dessinerCommandes")]),
+        if_(eq(var("scene"), "save"), [call("dessinerSauvegarde")]),
         if_(eq(var("scene"), "select"), [
             call("dessinerSelection"),
             set_var("niveauApercu", 0),
@@ -735,9 +884,13 @@ def fighter_scripts(t, me, op, is_player):
                              and_(lt(var("dist"), 120), le(var("r"), var("BotGarde")))), [
                     set_var("iBlock", 1),
                 ], [
+                    if_(and_(gt(V("Y"), GROUND), lt(var("dist"), 100)), [
+                        if_(lt(var("r"), var("BotAggro")), [set_var("iKick", 1)]),
+                    ]),
                     if_else(gt(var("dist"), 90), [
                         if_else(gt(OV("X"), V("X")), [set_var("iMove", 1)], [set_var("iMove", -1)]),
                         if_(lt(var("r"), 3), [set_var("iJump", 1)]),
+                        if_(and_(gt(OV("Y"), GROUND), lt(var("r"), var("BotGarde"))), [set_var("iMove", 0), set_var("iBlock", 1)]),
                         if_(and_(eq(V("Special"), 100), lt(var("r"), 40)), [set_var("iMove", 0)]),
                     ], [
                         if_else(and_(eq(V("Special"), 100), lt(var("r"), add(var("BotAggro"), 15))), [
@@ -762,6 +915,13 @@ def fighter_scripts(t, me, op, is_player):
     # ----- réception des dégâts
     take_hit = [
         if_(gt(V("Hit"), 0), [
+            # garde aérienne brisée par un coup de pied (ou un spécial) : moitié des dégâts + éjection
+            if_(and_(eq(state, "block"), and_(gt(V("Y"), GROUND), not_(eq(V("HitType"), "punch")))), [
+                setV("Hit", mathop("ceiling", div(V("Hit"), 2))),
+                setV("State", "idle"),
+                set_var("fxType", "ring"), set_var("fxX", V("X")), set_var("fxY", add(V("Y"), 50)),
+                create_clone("FX"), create_clone("FX"),
+            ]),
             if_else(and_(eq(state, "block"), not_(eq(V("Dir"), mul(90, V("HitDir"))))), [
                 # coup bloqué (on fait face à l'attaquant)
                 chV("HP", mul(-1, mathop("ceiling", mul(V("Hit"), 0.12)))),
@@ -788,8 +948,15 @@ def fighter_scripts(t, me, op, is_player):
     speed = var("P1Vitesse") if is_player else var("BotVitesse")
     start_actions = [
         if_(st_is("idle", "walk", "block"), [
-            if_else(and_(eq(var("iBlock"), 1), and_(eq(V("Y"), GROUND), not_(eq(state, "hurt")))), [
-                setV("State", "block"), set_var("vx", 0),
+            if_else(eq(var("iBlock"), 1), [
+                if_(and_(not_(eq(state, "block")), gt(V("Y"), GROUND)), [
+                    # garde aérienne : propulsion vers l'arrière
+                    set_var("vx", mul(V("Dir"), -0.09)),
+                    set_var("vy", 3),
+                    set_var("fxType", "ring"), set_var("fxX", V("X")), set_var("fxY", add(V("Y"), 40)), create_clone("FX"),
+                ]),
+                setV("State", "block"),
+                if_(eq(V("Y"), GROUND), [set_var("vx", 0)]),
             ], [
                 if_(eq(state, "block"), [setV("State", "idle")]),
                 if_else(eq(var("iPunch"), 1), [
@@ -824,10 +991,11 @@ def fighter_scripts(t, me, op, is_player):
             if_(and_(eq(var("hitDone"), 0), and_(ge(var("f"), spec["start"]), lt(var("f"), spec["end"]))), [
                 set_var("dx", sub(OV("X"), V("X"))),
                 if_(and_(lt(abs_(var("dx")), spec["range"]),
-                         and_(gt(mul(var("dx"), V("Dir")), -1), lt(abs_(sub(OV("Y"), V("Y"))), 80))), [
+                         and_(gt(mul(var("dx"), V("Dir")), -1), lt(abs_(sub(OV("Y"), V("Y"))), 115))), [
                     if_(not_(eq(OV("State"), "ko")), [
                         set_var("hitDone", 1),
                         set_var(op + "Hit", spec["dmg"]),
+                        set_var(op + "HitType", name),
                         if_else(gt(var("dx"), 0), [set_var(op + "HitDir", 1)], [set_var(op + "HitDir", -1)]),
                         chV("Special", 12),
                         if_(gt(V("Special"), 100), [setV("Special", 100)]),
@@ -845,7 +1013,12 @@ def fighter_scripts(t, me, op, is_player):
         change_var("vy", -0.8),
         chV("Y", var("vy")),
         if_(lt(V("Y"), GROUND), [setV("Y", GROUND), set_var("vy", 0)]),
-        if_(not_(eq(state, "walk")), [set_var("vx", mul(var("vx"), 0.7))]),
+        if_(and_(not_(eq(state, "walk")), eq(V("Y"), GROUND)), [set_var("vx", mul(var("vx"), 0.7))]),
+        if_(and_(eq(state, "block"), gt(V("Y"), GROUND)), [set_var("vx", mul(var("vx"), 0.93))]),
+        if_(and_(gt(V("Y"), GROUND), st_is("idle", "walk")), [
+            # contrôle aérien léger
+            if_(not_(eq(var("iMove"), 0)), [set_var("vx", mul(var("iMove"), speed))]),
+        ]),
         if_(lt(abs_(var("vx")), 0.3), [set_var("vx", 0)]),
         if_(gt(V("X"), 205), [setV("X", 205)]),
         if_(lt(V("X"), -205), [setV("X", -205)]),
@@ -915,6 +1088,7 @@ def fighter_scripts(t, me, op, is_player):
             ], [
                 if_(eq(var("scene"), "select"), [hide(), setV("Vis", 0)]),
                 if_(eq(var("scene"), "commandes"), [hide(), setV("Vis", 0)]),
+                if_(eq(var("scene"), "save"), [hide(), setV("Vis", 0)]),
             ]),
         ]
     else:
