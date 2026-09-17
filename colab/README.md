@@ -8,19 +8,32 @@ Trois scripts :
 | Script | Rôle | Clé API |
 |---|---|---|
 | `main.ipynb` → `main.py` (v2) | exécute les **tâches de recherche** programmées par l'IA, pousse les résultats au site | optionnelle (résumé local) |
-| `agent_search.ipynb` / `agent_search.py` | **Recherche agentique (1 cellule)** : dit ce qu'il fait, HTTP search/fetch (pas de navigateur JS), hits, étape suivante | optionnelle (Mistral pour enchaîner) |
+| `agent_search.ipynb` / `agent_search.py` | **Recherche agentique (1 cellule)** : 2 modes — question libre **ou** file de tâches du site ; dit ce qu'il fait, HTTP search/fetch (pas de navigateur JS), hits, étape suivante | optionnelle (Mistral pour enchaîner) |
 | `analyze_discussions.ipynb` / `analyze_discussions.py` | **Analyseur automatique de discussions** : vérifie les infos de TES discussions web et met à jour la base de connaissances | **requise — Mistral only** (fournie par l'utilisateur) |
 
 ## Recherche agentique (1 cellule)
 
-Colab n'a **pas** de vrai navigateur. `agent_search.py` (copier depuis `/colab` → bouton **Copier le code (1 cellule)**) :
+Colab n'a **pas** de vrai navigateur. `agent_search.py` (copier depuis `/colab` → bouton **Copier le code (1 cellule)**) propose **2 modes** au lancement :
 
-1. tu colles la question (« dernier modèle Anthropic ») ;
-2. le script **dit** l'étape (« je cherche … ») puis exécute HTTP (DDG / Wikipédia / fetch) ;
-3. les hits s'affichent ; avec une clé Mistral optionnelle, le modèle choisit fetch/search/stop (max 4 étapes) ;
-4. push `POST /api/research/results` — visible sur `/colab` et via `list_research_results`.
+1. **recherche personnalisée** (défaut) : tu colles la question (« dernier modèle Anthropic ») ;
+2. **tâches du site** : la file `pending` est rapatriée (`GET /api/research/tasks`) et
+   l'agent traite chaque tâche — statuts poussés (`PATCH`), résultats poussés avec le
+   vrai `task_id` (`POST /api/research/results`). `AGENT_MAX_TASKS` (défaut 3) borne le
+   run ; une tâche fetch commence par un fetch, une tâche note est poussée telle quelle.
+
+Dans les deux modes, le script **dit** l'étape (« je cherche … ») puis exécute HTTP
+(DDG / Wikipédia / fetch) ; les hits s'affichent ; avec une clé Mistral optionnelle, le
+modèle choisit fetch/search/stop (max 4 étapes) ; le résultat est poussé — visible sur
+`/colab` et via `list_research_results`.
 
 Sans clé : une seule recherche + push. Pages 100 % JS → texte vide (normal).
+
+**Clé API robuste (bug v1 corrigé)** : une clé collée peut contenir des caractères
+typographiques (« — », apostrophe courbe, retour à la ligne) que HTTP refuse dans ses
+en-têtes (latin-1 seulement) — cela faisait planter tout le run avec
+`UnicodeEncodeError`. La clé est maintenant nettoyée automatiquement (avec
+avertissement), et un appel LLM qui échoue (clé refusée, réseau…) arrête proprement
+l'agent au lieu de lever un traceback.
 
 ## Analyseur automatique de discussions (1 cellule)
 

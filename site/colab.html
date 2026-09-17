@@ -36,7 +36,8 @@
         Un second notebook, l'<b>analyseur de discussions</b> (<code>analyze_discussions.ipynb</code>),
         vérifie automatiquement les informations de vos conversations web et met à jour la base.
         Un troisième, la <b>recherche agentique</b> (<code>agent_search.ipynb</code> / 1 cellule) :
-        l'IA dit ce qu'elle fait, le script HTTP cherche (pas de navigateur JS), les hits reviennent, elle décide la suite.
+        2 modes au choix — question libre ou file de tâches du site. L'IA dit ce qu'elle fait,
+        le script HTTP cherche (pas de navigateur JS), les hits reviennent, elle décide la suite.
       </p>
     </section>
 
@@ -60,6 +61,8 @@
           <h2>Code — recherche agentique (1 cellule)</h2>
           <p class="small muted" style="margin:0 0 12px">
             <code>colab/agent_search.py</code> — collez tel quel dans une cellule Colab.
+            2 modes : <b>1</b> = recherche personnalisée (votre question) · <b>2</b> = tâches du site (la file pending est
+            exécutée par l'agent, résultats poussés avec leur <code>task_id</code>).
             HTTP only (pas de navigateur JS) : le script dit ce qu'il fait, cherche, affiche les hits, enchaîne fetch/search.
           </p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
