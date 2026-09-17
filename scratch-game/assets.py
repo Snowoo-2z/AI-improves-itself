@@ -18,7 +18,7 @@ GLYPH_CHARS = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789"
-    ".,!?:-+/'%()<>=éèêàçùôîûÉÈÊÀÇ«»"
+    ".,!?:-+/'%()<>=éèêàçùôîûÉÈÊÀÇ«»â"
 )
 EM_PX = 40.0  # hauteur d'un em à 100 % de taille sprite
 
@@ -71,11 +71,131 @@ VISOR = "#101018"
 EYE = "#7cf6ff"
 
 W, H = 170, 180
-FEET = (85, 166)  # centre de rotation (pieds)
+FEET = (85, 166)  # centre de rotation (pieds) — repère des costumes sans arme
+
+# un costume avec arme a besoin de plus de place (lame tendue vers l'avant, arme levée)
+W_ARME, H_ARME = 340, 300
+FEET_ARME = (110, 250)
+
+_ORIGIN = [FEET[0], FEET[1]]
 
 
 def _p(x, y):
-    return FEET[0] + x, FEET[1] - y
+    return _ORIGIN[0] + x, _ORIGIN[1] - y
+
+
+# ------------------------------------------------------------------ Armes
+# Chaque arme est dessinée dans un repère local : origine = la main, +x vers l'avant,
+# +y vers le bas. On l'insère ensuite dans le costume du combattant, avec un angle
+# propre à chaque pose (l'arme suit donc vraiment la main et l'animation).
+ACIER = "#e3e8f5"
+ACIER2 = "#9aa6bd"
+OR = "#ffc107"
+BOIS = "#8d5524"
+CUIR = "#3a2a1a"
+
+_EPEE = (
+    f'<rect x="-20" y="-5" width="20" height="10" rx="4" fill="{CUIR}" stroke="{INK}" stroke-width="3"/>'
+    f'<circle cx="-23" cy="0" r="6" fill="{OR}" stroke="{INK}" stroke-width="3"/>'
+    f'<rect x="0" y="-16" width="9" height="32" rx="4" fill="{OR}" stroke="{INK}" stroke-width="3"/>'
+    f'<polygon points="9,-6 70,-6 92,0 70,6 9,6" fill="{ACIER}" stroke="{INK}" stroke-width="3" stroke-linejoin="round"/>'
+    f'<line x1="16" y1="0" x2="72" y2="0" stroke="{ACIER2}" stroke-width="2"/>')
+
+_LANCE = (
+    f'<rect x="-30" y="-4" width="116" height="8" rx="4" fill="{BOIS}" stroke="{INK}" stroke-width="3"/>'
+    f'<rect x="-32" y="-6" width="7" height="12" rx="3" fill="{CUIR}" stroke="{INK}" stroke-width="2.5"/>'
+    f'<polygon points="84,-9 120,0 84,9" fill="{ACIER}" stroke="{INK}" stroke-width="3" stroke-linejoin="round"/>'
+    f'<line x1="88" y1="0" x2="112" y2="0" stroke="{ACIER2}" stroke-width="2"/>')
+
+_MARTEAU = (
+    f'<rect x="-26" y="-5" width="72" height="10" rx="5" fill="{BOIS}" stroke="{INK}" stroke-width="3"/>'
+    f'<rect x="-30" y="-6" width="8" height="12" rx="3" fill="{CUIR}" stroke="{INK}" stroke-width="2.5"/>'
+    f'<rect x="32" y="-23" width="30" height="46" rx="7" fill="{ACIER2}" stroke="{INK}" stroke-width="3"/>'
+    f'<rect x="37" y="-18" width="20" height="15" rx="4" fill="{ACIER}" opacity="0.85"/>'
+    f'<rect x="37" y="4" width="20" height="14" rx="4" fill="#7d8aa3"/>')
+
+_ARC = (
+    f'<path d="M 10,-52 Q 42,0 10,52" fill="none" stroke="{INK}" stroke-width="12" stroke-linecap="round"/>'
+    f'<path d="M 10,-52 Q 42,0 10,52" fill="none" stroke="{BOIS}" stroke-width="7" stroke-linecap="round"/>'
+    f'<line x1="10" y1="-52" x2="10" y2="52" stroke="#f4f4f4" stroke-width="2.5"/>'
+    f'<line x1="-26" y1="0" x2="60" y2="0" stroke="#c8a165" stroke-width="4"/>'
+    f'<polygon points="60,-6 76,0 60,6" fill="{ACIER}" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round"/>'
+    f'<polygon points="-26,0 -15,-8 -6,0 -15,8" fill="#e74c3c"/>')
+
+_BOUCLIER = (
+    f'<rect x="-18" y="-34" width="48" height="68" rx="13" fill="#5c6bc0" stroke="{INK}" stroke-width="4"/>'
+    f'<rect x="-11" y="-26" width="34" height="52" rx="9" fill="#7986cb"/>'
+    f'<circle cx="6" cy="0" r="8" fill="{OR}" stroke="{INK}" stroke-width="3"/>'
+    f'<line x1="6" y1="-26" x2="6" y2="-11" stroke="{INK}" stroke-width="3"/>'
+    f'<line x1="6" y1="11" x2="6" y2="26" stroke="{INK}" stroke-width="3"/>')
+
+# id -> (markup local, décalage dx/dy de la main) ; "poings" = pas d'arme dessinée
+ARMES_COSTUME = {
+    "epee": (_EPEE, -2, 0),
+    "lance": (_LANCE, -6, 0),
+    "marteau": (_MARTEAU, -8, 0),
+    "arc": (_ARC, -4, 0),
+    "bouclier": (_BOUCLIER, -16, 0),
+}
+
+# angle de l'arme (degrés, 0 = tendue vers l'avant, négatif = vers le haut)
+ARME_ANGLES = {
+    "defaut": {"idle": -55, "idle2": -50, "walk1": -46, "walk2": -52, "jump": -40,
+               "punch": -4, "kick": -28, "special": -8, "block": 24, "hurt": -18, "ko": -12, "win": -76},
+    "epee": {"block": -26},
+    "lance": {"idle": -30, "idle2": -28, "walk1": -26, "walk2": -30, "jump": -22, "punch": -2,
+              "kick": -20, "special": -4, "block": -18, "hurt": -20, "ko": -12, "win": -62},
+    "marteau": {"idle": -48, "idle2": -44, "walk1": -42, "walk2": -46, "jump": -36, "punch": -6,
+                "kick": -26, "special": -10, "block": -22, "hurt": -18, "ko": -12, "win": -70},
+    "arc": {"idle": -12, "idle2": -10, "walk1": -14, "walk2": -12, "jump": -8, "punch": 0,
+            "kick": -10, "special": 0, "block": 0, "hurt": -30, "ko": -20, "win": -30},
+    "bouclier": {"idle": -8, "idle2": -6, "walk1": -10, "walk2": -8, "jump": -6, "punch": 0,
+                 "kick": -6, "special": 0, "block": 0, "hurt": -20, "ko": -10, "win": -20},
+}
+# chaque entrée hérite des angles par défaut
+for _k in ("epee", "lance", "marteau", "arc", "bouclier"):
+    _base = dict(ARME_ANGLES["defaut"])
+    _base.update(ARME_ANGLES[_k])
+    ARME_ANGLES[_k] = _base
+
+
+# longueur visuelle de chaque arme (pour l'échelle des icônes)
+ARME_LONGUEUR = {"epee": 92, "lance": 120, "marteau": 62, "arc": 76, "bouclier": 48}
+
+
+def weapon_icon_svg(wid):
+    """Icône 120x120 : halo + arme, utilisée comme objet au sol et comme vignette du HUD."""
+    markup = ARMES_COSTUME[wid][0]
+    L = ARME_LONGUEUR[wid]
+    s = round(min(1.0, 74.0 / L), 3)
+    body = (f'<g transform="translate(60,60) rotate(-24) scale({s}) translate({-L * 0.48:.0f},0)">{markup}</g>')
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">'
+            '<defs><radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">'
+            '<stop offset="0" stop-color="#fff59d" stop-opacity="0.95"/>'
+            '<stop offset="0.55" stop-color="#ffb300" stop-opacity="0.45"/>'
+            '<stop offset="1" stop-color="#ff6f00" stop-opacity="0"/></radialGradient></defs>'
+            '<circle cx="60" cy="60" r="56" fill="url(#halo)"/>'
+            f'<circle cx="60" cy="60" r="34" fill="#ffd54a" opacity="0.30"/>'
+            f'{body}</svg>')
+
+
+def poing_icon_svg():
+    """Vignette « mains nues » pour le HUD."""
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">'
+            f'<circle cx="60" cy="60" r="30" fill="{GLOVE}" stroke="{INK}" stroke-width="4"/>'
+            f'<circle cx="74" cy="58" r="15" fill="{GLOVE}" stroke="{INK}" stroke-width="4"/>'
+            f'<rect x="40" y="46" width="34" height="28" rx="12" fill="#43435a" opacity="0.9"/>'
+            '</svg>')
+
+
+def arrow_svg():
+    """Flèche tirée à l'arc (sprite séparé, pointe vers la droite)."""
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="76" height="20" viewBox="0 0 76 20">'
+            f'<line x1="6" y1="10" x2="60" y2="10" stroke="#c8a165" stroke-width="5"/>'
+            f'<polygon points="58,3 76,10 58,17" fill="{ACIER}" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round"/>'
+            f'<polygon points="6,10 20,1 30,10 20,19" fill="#e74c3c"/>'
+            f'<line x1="16" y1="4" x2="16" y2="16" stroke="{INK}" stroke-width="2"/></svg>')
+
 
 
 def _seg(a, b, w, color, outline=True):
@@ -124,11 +244,13 @@ def _fk_up(origin, lengths, angles):
     return pts
 
 
-def fighter_svg(pose):
+def fighter_svg(pose, posename="idle", weapon="poings"):
     """pose : dict avec les clés
        hip_y, lean (deg, + = avant), legs: (backThigh, backKnee, frontThigh, frontKnee),
        arms: (backSh, backEl, frontSh, frontEl), head_tilt, rot (rotation globale), extra
-       Renvoie (svg, head_center_xy_relatif_pieds)."""
+       weapon : id d'arme ("poings" = mains nues) dessinée dans la main avant.
+       Renvoie (svg, head_center_xy_relatif_pieds, (cx, cy))."""
+    _ORIGIN[0], _ORIGIN[1] = FEET_ARME if weapon in ARMES_COSTUME else FEET
     hip_y = pose.get("hip_y", 62)
     lean = pose.get("lean", 0)
     rot = pose.get("rot", 0)
@@ -190,19 +312,37 @@ def fighter_svg(pose):
     parts.append(_seg(front_arm[0], front_arm[1], 12, SUIT))
     parts.append(_seg(front_arm[1], front_arm[2], 11, SUIT))
     parts.append(_circle(front_arm[2], 8.5, GLOVE))
+    if weapon in ARMES_COSTUME:
+        markup, dx, dy = ARMES_COSTUME[weapon]
+        wx, wy = front_arm[2][0] + dx, front_arm[2][1] + dy
+        hx_svg, hy_svg = _p(wx, wy)
+        ang = ARME_ANGLES[weapon].get(posename, -45)
+        parts.append(f'<g transform="translate({hx_svg:.1f},{hy_svg:.1f}) rotate({ang})">{markup}</g>')
     extra = pose.get("extra", "")
 
     body = "".join(parts)
-    fx, fy = FEET
+    fx, fy = _ORIGIN
+    w, h = (W_ARME, H_ARME) if weapon in ARMES_COSTUME else (W, H)
     transform = f'translate(0,{-lift}) rotate({rot} {fx} {fy})'
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
            f'<g transform="{transform}">{body}</g>{extra}</svg>')
     # centre de la tête après rotation / lift (relatif au centre de rotation, y vers le haut)
     hxr, hyr = head
     a = math.radians(-rot)  # rotation svg (sens horaire) -> repère y haut
     rx = hxr * math.cos(a) - hyr * math.sin(a)
     ry = hxr * math.sin(a) + hyr * math.cos(a)
-    return svg, (round(rx, 1), round(ry + lift, 1))
+    return svg, (round(rx, 1), round(ry + lift, 1)), (fx, fy)
+
+
+# Poses retouchées pour certaines armes : un bouclier ne se tient pas à hauteur de visage
+# dans la garde (il masquerait la tête), on baisse donc le bras avant en pose "block".
+POSE_ARME = {
+    "bouclier": {
+        "block": dict(arms=(70, 140, 34, 92)),
+        "idle": dict(arms=(55, 120, 60, 96)),
+        "idle2": dict(arms=(58, 118, 62, 92)),
+    },
+}
 
 
 def fighter_poses():
@@ -447,4 +587,9 @@ def sounds():
     S["lose"] = _wav(samples)
     n = int(RATE * 0.35)
     S["round"] = _wav([_env(i, n, decay=1) * 0.5 * (math.sin(2 * math.pi * 440 * i / RATE) + 0.5 * math.sin(2 * math.pi * 880 * i / RATE)) for i in range(n)])
+    # tir à l'arc : corde qui claque (bruit court + chute de hauteur)
+    n = int(RATE * 0.14)
+    S["tir"] = _wav([(_env(i, n, attack=0.001, decay=2.2)
+                      * (0.55 * nx() * (1 - i / n) ** 2
+                         + 0.5 * math.sin(2 * math.pi * (700 - 420 * i / n) * i / RATE))) * 0.85 for i in range(n)])
     return S
