@@ -516,6 +516,10 @@ def fx_svgs():
                  '<circle cx="40" cy="40" r="34" fill="none" stroke="#ffffff" stroke-width="6"/></svg>')
     F["bolt"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60">'
                  '<polygon points="24,2 6,32 18,32 12,58 34,24 22,24 30,2" fill="#ffee58" stroke="#fff" stroke-width="2"/></svg>')
+    F["bulle"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140">'
+                  '<circle cx="70" cy="70" r="64" fill="#7fd4ff" fill-opacity="0.16" stroke="#c9f0ff" stroke-width="6"/>'
+                  '<circle cx="70" cy="70" r="58" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.55"/>'
+                  '<ellipse cx="46" cy="40" rx="16" ry="10" fill="#ffffff" fill-opacity="0.35" transform="rotate(-28 46 40)"/></svg>')
     F["pixel"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4" viewBox="0 0 4 4">'
                   '<rect width="4" height="4" fill="#ffffff"/></svg>')
     return F

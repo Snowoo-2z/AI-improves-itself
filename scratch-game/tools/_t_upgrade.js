@@ -66,7 +66,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async()=>{
   // ---- 7) sauvegarde : les niveaux partent dans le code et reviennent
   set('scene','menu'); set('pieces',1500); set('niveauMax',6); step(3); clic(28,-112); step(3);
   const code=get('codeSauvegarde');
-  console.log('7) code =', code, '|', code.replace(/-/g,'').length, 'chiffres (24 attendus)');
+  console.log('7) code =', code, '|', code.replace(/-/g,'').length, 'chiffres (36 attendus)');
   LV(2); L('armeNiveau')[1]=1; set('pieces',0); set('scene','menu'); step(2);
   await charger(code);
   console.log('8) après chargement : épée niveau =', LV(2), '| pièces =', get('pieces'), '|', get('infoSauvegarde'));

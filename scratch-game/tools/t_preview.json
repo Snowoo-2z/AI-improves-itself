@@ -60,6 +60,51 @@
   },
   {
    "set": {
+    "scene": "shop",
+    "shopPage": 3,
+    "pieces": 900,
+    "P1Arme": 2,
+    "P1ArmeOrig": 2,
+    "armeApercu": 2,
+    "niveauMax": 4
+   },
+   "list": {
+    "armePossede": [
+     1,
+     1,
+     1,
+     0,
+     0,
+     0
+    ],
+    "armeNiveau": [
+     3,
+     3,
+     2,
+     1,
+     1,
+     1
+    ],
+    "talPts": [
+     1,
+     2,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "wait": 8,
+   "shot": "p_atelier"
+  },
+  {
+   "set": {
     "scene": "fight",
     "phase": "intro",
     "phaseTimer": 2,
@@ -225,10 +270,64 @@
     "scene": "save",
     "niveauMax": 4,
     "pieces": 640,
-    "codeSauvegarde": "5-01234-001-01-1-1-17-4-111111-03"
+    "codeSauvegarde": "5-01234-001-01-1-1-19-4-151111-000000000000-55"
    },
    "wait": 8,
    "shot": "p_save"
+  },
+  {
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5,
+    "BotArme": 6,
+    "niveau": 8,
+    "P1Special": 0,
+    "BotNom": "Le Champion",
+    "BotTeinte": 25
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -120,
+    "BotX": 60,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 600,
+    "BotAggro": 0,
+    "BotVitesse": 0
+   },
+   "wait": 3
+  },
+  {
+   "hold": "u",
+   "frames": 3
+  },
+  {
+   "loop": {
+    "frames": 30,
+    "each": {
+     "set": {
+      "BotX": 60,
+      "BotState": "idle",
+      "P1X": -120
+     }
+    },
+    "stop": "BotHP<0"
+   },
+   "wait": 3,
+   "shot": "p_bulle"
   }
  ]
 }

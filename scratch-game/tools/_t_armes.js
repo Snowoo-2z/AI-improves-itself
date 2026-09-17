@@ -96,7 +96,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   setL('armePossede',2,1); setL('armePossede',5,1);
   step(3); clic(28,-112); step(3);
   const code=get('codeSauvegarde');
-  console.log('9) code de sauvegarde =', code, '(', code.replace(/-/g,'').length, 'chiffres, 24 attendus ; niveaux =', S().lookupVariableByNameAndType('armeNiveau','list').value.join(''), ')');
+  console.log('9) code de sauvegarde =', code, '(', code.replace(/-/g,'').length, 'chiffres, 36 attendus ; niveaux =', S().lookupVariableByNameAndType('armeNiveau','list').value.join(''), ')');
   // 10) rechargement du code : arme retrouvée
   set('pieces',10); set('niveauMax',1); set('P1Arme',1); set('P1ArmeOrig',1);
   setL('armePossede',2,0); setL('armePossede',5,0);
