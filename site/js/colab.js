@@ -125,3 +125,68 @@ form.addEventListener("submit", async (e) => {
 
 Promise.all([renderTasks(), renderResults()]).catch((e) => toast(e.message, true));
 renderStatusChip();
+
+/* ── Code viewer — analyseur de discussions (lazy-load + copy) ──────────── */
+{
+  const toggleBtn = document.getElementById("btn-toggle-code");
+  const copyBtn = document.getElementById("btn-copy-code");
+  const viewer = document.getElementById("code-viewer");
+  const codeBlock = document.getElementById("code-block");
+  let rawCode = null; // cached source text
+
+  async function loadCode() {
+    if (rawCode !== null) return true;
+    toggleBtn.textContent = "Chargement…";
+    toggleBtn.disabled = true;
+    try {
+      const res = await fetch("/colab-notebook/analyze_discussions.py");
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      rawCode = await res.text();
+      codeBlock.textContent = rawCode;
+      copyBtn.disabled = false;
+      return true;
+    } catch (err) {
+      toast("Impossible de charger le code : " + err.message, true);
+      return false;
+    } finally {
+      toggleBtn.disabled = false;
+    }
+  }
+
+  toggleBtn.addEventListener("click", async () => {
+    const visible = viewer.style.display !== "none";
+    if (visible) {
+      viewer.style.display = "none";
+      toggleBtn.textContent = "Afficher le code";
+      return;
+    }
+    if (rawCode === null) {
+      const ok = await loadCode();
+      if (!ok) { toggleBtn.textContent = "Afficher le code"; return; }
+    }
+    viewer.style.display = "block";
+    toggleBtn.textContent = "Masquer le code";
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    if (!rawCode) return;
+    try {
+      await navigator.clipboard.writeText(rawCode);
+      const prev = copyBtn.textContent;
+      copyBtn.textContent = "✅ Copié !";
+      setTimeout(() => { copyBtn.textContent = prev; }, 2000);
+    } catch {
+      /* fallback : select-all via textarea */
+      const ta = document.createElement("textarea");
+      ta.value = rawCode;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      const prev = copyBtn.textContent;
+      copyBtn.textContent = "✅ Copié !";
+      setTimeout(() => { copyBtn.textContent = prev; }, 2000);
+    }
+  });
+}
