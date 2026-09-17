@@ -235,6 +235,27 @@ function parseRawThinking(raw) {
 
 function eventCard(ev) {
   if (ev.type === "tool") {
+    if (ev.skill === "web_agent") {
+      const r = ev.result || {};
+      const say = r.say || (ev.args || {}).say || "";
+      const hits = Array.isArray(r.hits) ? r.hits : [];
+      const lines = hits.slice(0, 5).map((h, i) => {
+        const title = esc(h.title || "(sans titre)");
+        const url = esc(h.url || "");
+        const snip = esc((h.snippet || h.excerpt || "").slice(0, 160));
+        return `<div class="agent-hit"><b>${i + 1}.</b> ${title}${url ? ` <span class="muted">${url}</span>` : ""}<br>${snip}</div>`;
+      }).join("");
+      return traceCard({
+        cls: "agent",
+        open: true,
+        summaryHtml: `${icon("wrench")}<span>agent · <b>${esc(r.kind || "search")}</b></span> <span class="muted">${esc(say || r.target || "").slice(0, 90)}</span>`,
+        bodyHtml:
+          (say ? `<p><i>${esc(say)}</i></p>` : "") +
+          `<p class="muted small">${esc(r.engine || "")} · ${esc(r.browser || "http")} · ${hits.length} hit(s)</p>` +
+          (lines || "→ aucun hit") +
+          (r.next_hint ? `<p class="muted small">${esc(r.next_hint)}</p>` : ""),
+      });
+    }
     const args = Object.entries(ev.args || {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" · ");
     const ok = ev.result && ev.result.ok !== false;
     return traceCard({

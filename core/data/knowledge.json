@@ -47,5 +47,19 @@
     "date": "2024-01-01",
     "summary": "Backend open-source (Postgres, auth, storage, real-time) avec free tier. Bientôt la base de données du projet (voir supabase/schema.sql).",
     "source": "seed"
+  },
+  {
+    "title": "Anthropic Mythos 5",
+    "category": "ia",
+    "date": "2026-06-23",
+    "summary": "Modèle Mythos 5 d'Anthropic : accès partiellement réautorisé aux États-Unis (juin 2026). Existe, mais ce n'est pas le modèle le plus récent de la gamme.",
+    "source": "seed"
+  },
+  {
+    "title": "Anthropic Claude Fable 5.1",
+    "category": "ia",
+    "date": "2026-09-10",
+    "summary": "Claude Fable 5.1 d'Anthropic : dernier modèle de la gamme au 10 septembre 2026 (postérieur à Mythos 5).",
+    "source": "seed"
   }
 ]

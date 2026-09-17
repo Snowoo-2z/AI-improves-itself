@@ -285,6 +285,65 @@ with mock.patch.object(skills_manager, "_load_knowledge", return_value=[fixture_
     still_empty = skills_manager.execute("search_knowledge", {"query": "modèle OpenAI"})
 check("un seul terme absent → toujours vide (garde-fou historique inchangé)", still_empty["entries"] == [])
 
+print("[7] « dernier modèle Anthropic » : date exacte, Mythos 5 n'est pas le dernier")
+fixture_anth = [
+    {
+        "title": "Anthropic Mythos 5",
+        "category": "ia",
+        "date": "2026-06-23",
+        "summary": "Mythos 5 existe, accès partiellement réautorisé.",
+        "source": "seed",
+    },
+    {
+        "title": "Anthropic Claude Fable 5.1",
+        "category": "ia",
+        "date": "2026-09-10",
+        "summary": "Claude Fable 5.1 : dernier modèle Anthropic.",
+        "source": "seed",
+    },
+]
+with mock.patch.object(skills_manager, "_load_knowledge", return_value=fixture_anth):
+    latest = skills_manager.execute(
+        "search_knowledge", {"query": "modèle Anthropic", "use_date": True}
+    )
+    oldest_first = skills_manager.execute(
+        "search_knowledge", {"query": "modèle Anthropic", "use_date": False}
+    )
+check(
+    "use_date=true → Claude Fable 5.1 en premier (date 2026-09-10)",
+    latest["entries"][0]["title"] == "Anthropic Claude Fable 5.1",
+    json.dumps(latest),
+)
+check(
+    "Mythos 5 reste listé mais plus ancien",
+    any(e["title"] == "Anthropic Mythos 5" for e in latest["entries"])
+    and latest["entries"][0]["date"] == "2026-09-10",
+)
+check("la source est renvoyée", "source" in latest["entries"][0])
+check(
+    "sans use_date les deux modèles restent trouvables",
+    {e["title"] for e in oldest_first["entries"]}
+    >= {"Anthropic Mythos 5", "Anthropic Claude Fable 5.1"},
+)
+check(
+    "chronologie datée : Fable puis Mythos",
+    [t["title"] for t in latest.get("timeline") or []][:2]
+    == ["Anthropic Claude Fable 5.1", "Anthropic Mythos 5"],
+    json.dumps(latest.get("timeline")),
+)
+check("chaque entrée datée a dated=true", all(e.get("dated") for e in latest["entries"]))
+
+print("[8] Filtre date/année sur la recherche")
+with mock.patch.object(skills_manager, "_load_knowledge", return_value=fixture_anth):
+    june = skills_manager.execute(
+        "search_knowledge", {"query": "Anthropic", "date": "2026-06-23"}
+    )
+    year = skills_manager.execute(
+        "search_knowledge", {"query": "Anthropic", "date": "2026"}
+    )
+check("jour exact → uniquement Mythos 5", [e["title"] for e in june["entries"]] == ["Anthropic Mythos 5"], json.dumps(june))
+check("année 2026 → les deux, Fable d'abord", year["entries"][0]["title"] == "Anthropic Claude Fable 5.1" and len(year["timeline"]) == 2)
+
 print(f"RÉSULTAT : {len(PASSED)} OK, {len(FAILED)} en échec")
 if FAILED:
     for item in FAILED:

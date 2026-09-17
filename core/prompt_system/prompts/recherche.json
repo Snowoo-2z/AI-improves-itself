@@ -1,9 +1,9 @@
 {
   "id": "recherche",
   "scope": "recherche",
-  "version": 4,
+  "version": 5,
   "updated_by": "human",
-  "updated_at": 1789625661.338048,
+  "updated_at": 1789633622.5460713,
   "keywords": [
     "cherche sur le web",
     "scrape",
@@ -13,9 +13,13 @@
     "recherche web",
     "dernières news",
     "actualités",
-    "veille"
+    "veille",
+    "dernier modèle",
+    "web_agent",
+    "internet",
+    "cherche"
   ],
-  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.\n## Re-demande d'une info déjà cherchée (anti-perte)\n- Les résultats bruts de Colab ne sont JAMAIS perdus : ils restent dans la collection « recherche » même si l'étude automatique a échoué (moteur en repos au moment du push) — l'étude est alors ré-essayée automatiquement (et manuellement depuis /colab).\n- Si l'utilisateur te redemande une info web : commence par `search_knowledge(query, use_date)`, puis `list_research_results(query=« sujet »)`. Réponds à partir de l'extrait du résultat en citant la source et la date — jamais « je ne sais pas » si un résultat exploitable existe.\n- Si `pending_tasks` contient déjà une tâche pour le même sujet, ne la ré-programme PAS : dis explicitement à l'utilisateur que la recherche est en attente d'exécution par le notebook Colab.",
+  "content": "## Module spécialisé : recherche web\nMode AGENT (préféré) : `web_agent` exécute TOUT DE SUITE une étape HTTP (pas de navigateur JS — Colab non plus).\n1. `web_agent(kind=search, target=requête, say=« je cherche … »)` — hits titre/url/extrait dans ce tour.\n2. Si une URL est utile : `web_agent(kind=fetch, target=URL, say=« je lis … »)`.\n3. Cite DATE DU FAIT + source. Mémorise avec `add_knowledge` (date ISO du fait).\n4. Max 3 étapes web_agent par message. Si page 100 % JS / vide : `add_research_task` (Colab, asynchrone).\nColab n'a pas de vrai navigateur : HTTP seulement (DDG / Wikipédia / fetch HTML).\n## Re-demande d'une info déjà cherchée\n- `search_knowledge` (dates / timeline) puis `list_research_results(query)`.\n- Ne reprogramme pas une tâche déjà pending.\n",
   "history": [
     {
       "version": 1,
@@ -40,6 +44,14 @@
       "trigger": "manuel",
       "author": "human",
       "at": 1789625661.3380444
+    },
+    {
+      "version": 4,
+      "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.\n## Re-demande d'une info déjà cherchée (anti-perte)\n- Les résultats bruts de Colab ne sont JAMAIS perdus : ils restent dans la collection « recherche » même si l'étude automatique a échoué (moteur en repos au moment du push) — l'étude est alors ré-essayée automatiquement (et manuellement depuis /colab).\n- Si l'utilisateur te redemande une info web : commence par `search_knowledge(query, use_date)`, puis `list_research_results(query=« sujet »)`. Réponds à partir de l'extrait du résultat en citant la source et la date — jamais « je ne sais pas » si un résultat exploitable existe.\n- Si `pending_tasks` contient déjà une tâche pour le même sujet, ne la ré-programme PAS : dis explicitement à l'utilisateur que la recherche est en attente d'exécution par le notebook Colab.",
+      "reason": "Agent web immédiat (HTTP, pas de navigateur JS).",
+      "trigger": "manuel",
+      "author": "human",
+      "at": 1789633622.5460703
     }
   ]
 }

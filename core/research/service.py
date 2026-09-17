@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 
 from core import store as store_module
 from core.ai.providers import LocalDemoProvider, chat_with_failover
@@ -256,6 +257,51 @@ def _clean_entry(js: dict) -> dict | None:
     }
 
 
+# Mots trop génériques pour l'ancrage titre↔brut (les noms propres restent exigés).
+_GROUNDING_STOP = {
+    "acces", "apres", "article", "cette", "chez", "dans", "dernier", "derniere",
+    "entre", "etude", "lancement", "modele", "modeles", "nouveau", "nouvelle",
+    "partiel", "partielle", "plus", "pour", "projet", "recherche", "selon",
+    "suite", "vers", "avec", "sans", "sous", "sur", "une", "des", "les", "the",
+    "and", "for", "with", "from", "after", "latest", "model", "models", "news",
+}
+
+
+def _norm_ground(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", text).lower()
+
+
+def _distinctive_tokens(text: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", _norm_ground(text))
+    out: list[str] = []
+    for t in tokens:
+        if len(t) < 5:
+            continue
+        if t.isdigit():
+            continue
+        if t in _GROUNDING_STOP:
+            continue
+        out.append(t)
+    return out
+
+
+def _entry_grounded_in_raw(entry: dict, raw: str) -> tuple[bool, str]:
+    """Refuse une entrée dont les noms propres du titre n'apparaissent pas dans le brut.
+
+    C'est le filet anti-hallucination : le LLM de structuration peut inventer un
+    modèle « Mythos » alors que Colab a lu une page sur Claude. Sans ce test,
+    l'entrée empoisonne la base et `search_knowledge(use_date=true)` la sert
+    comme « dernier modèle ».
+    """
+    hay = _norm_ground(raw)
+    missing = [t for t in _distinctive_tokens(str(entry.get("title") or "")) if t not in hay]
+    if missing:
+        return False, "titre non ancré dans le brut (termes absents : " + ", ".join(missing[:6]) + ")"
+    return True, ""
+
+
 def _dedupe(entry: dict) -> bool:
     """Évite de re-écrire une entrée quasi identique déjà en base."""
     s = store_module.get_store()
@@ -408,6 +454,15 @@ def study_result(result: dict, *, force: bool = False) -> dict:
             "verify_provider": check_provider,
             "confidence": confidence,
         }
+    if not force:
+        grounded, ground_reason = _entry_grounded_in_raw(entry, raw)
+        if not grounded:
+            return {
+                "status": "rejected",
+                "reason": ground_reason,
+                "provider": provider,
+                "verify_provider": check_provider,
+            }
     if _dedupe(entry):
         return {"status": "duplicate", "reason": "entrée déjà présente dans la base", "confidence": confidence}
 
