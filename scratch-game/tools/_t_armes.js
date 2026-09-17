@@ -32,7 +32,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   // achat de l'épée (bouton 2 : x=0,y=72) -> clic souris
   const clic=(x,y)=>{vm.postIOData('mouse',{x:x+240,y:180-y,isDown:true,canvasWidth:480,canvasHeight:360});step(1);
                      vm.postIOData('mouse',{x:x+240,y:180-y,isDown:false,canvasWidth:480,canvasHeight:360});step(2);};
-  clic(0,72); clic(0,72);
+  clic(0,74); clic(0,74);
   // clic sur CHARGER + réponse à la question « colle ton code » (l'ANSWER doit être émis entre deux images)
   // le bloc « demander et attendre » rend une promesse : il faut laisser tourner
   // la boucle de micro-tâches entre deux images pour que le thread reparte
@@ -83,19 +83,20 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   console.log('7) salve arc : flèches simultanées =', n);
   step(60); R.toPNG('out/a_salve.png');
   console.log('   HP bot après salve =', get('BotHP'));
-  // 8) arme au sol visible + ramassage
+  // 8) plus aucune arme au sol : sprites ArmeSol absents et rien ne doit apparaître en combat
   combat(1,1);
-  setL('solArme',1,4); setL('solX',1,-170); setL('solY',1,-92); setL('solArme',2,5); setL('solX',2,170); setL('solY',2,-14);
-  set('P1X',-120); step(3); R.toPNG('out/a_sol.png');
-  console.log('8) armes au sol : solArme =', getL('solArme',1), getL('solArme',2));
-  set('P1X',-170); set('P1Y',-92); step(3);
-  console.log('   ramassage : P1Arme =', get('P1Arme'), '| solArme[1] =', getL('solArme',1), '| solTimer[1] =', getL('solTimer',1));
+  const solSprites=vm.runtime.targets.filter(t=>/ArmeSol/.test(t.sprite.name)).length;
+  let apparues=0;
+  for(let i=0;i<300;i++){ vm.runtime._step();
+    apparues += vm.runtime.targets.filter(t=>t.isOriginal&&/ArmeSol/.test(t.sprite.name)&&t.visible).length; }
+  console.log('8) armes au sol : sprites =', solSprites, '| apparitions visibles en 300 images =', apparues,
+              '| variables sol* =', ['solArme','solX','solY','solTimer'].filter(v=>S().lookupVariableByNameAndType(v,'')||S().lookupVariableByNameAndType(v,'list')).length);
   // 9) sauvegarde : clic sur SAUVER au menu
   set('scene','menu'); set('pieces',900); set('niveauMax',5); set('P1Arme',5); set('P1ArmeOrig',5);
   setL('armePossede',2,1); setL('armePossede',5,1);
   step(3); clic(28,-112); step(3);
   const code=get('codeSauvegarde');
-  console.log('9) code de sauvegarde =', code, '(18 chiffres attendus)');
+  console.log('9) code de sauvegarde =', code, '(', code.replace(/-/g,'').length, 'chiffres, 24 attendus ; niveaux =', S().lookupVariableByNameAndType('armeNiveau','list').value.join(''), ')');
   // 10) rechargement du code : arme retrouvée
   set('pieces',10); set('niveauMax',1); set('P1Arme',1); set('P1ArmeOrig',1);
   setL('armePossede',2,0); setL('armePossede',5,0);

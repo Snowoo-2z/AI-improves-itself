@@ -18,7 +18,7 @@ GLYPH_CHARS = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789"
-    ".,!?:-+/'%()<>=éèêàçùôîûÉÈÊÀÇ«»â"
+    ".,!?:-+/'%()<>=éèêàçùôîûÉÈÊÀÇ«»â→"
 )
 EM_PX = 40.0  # hauteur d'un em à 100 % de taille sprite
 

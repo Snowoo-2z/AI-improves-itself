@@ -7,6 +7,7 @@ const S=()=>vm.runtime.getTargetForStage();
 const set=(k,v)=>{S().lookupVariableByNameAndType(k,'').value=v;};
 const get=k=>S().lookupVariableByNameAndType(k,'').value;
 const step=n=>{for(let i=0;i<n;i++)vm.runtime._step();};
+const L=n=>S().lookupVariableByNameAndType(n,'list').value;
 const souris=(x,y,down)=>vm.postIOData('mouse',{x:x+240,y:180-y,isDown:!!down,canvasWidth:480,canvasHeight:360});
 vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   vm.start(); vm.greenFlag(); step(5); fs.mkdirSync('out',{recursive:true});
@@ -40,16 +41,13 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   step(2); vm.postIOData('keyboard',{key:'k',isDown:true}); step(5); vm.postIOData('keyboard',{key:'k',isDown:false});
   for(let i=0;i<14;i++){set('BotX',60);set('P1X',-170);vm.runtime._step();}
   R.toPNG('out/s_fleche.png');
-  // 5) arme au sol + ramassage
-  set('scene','fight'); set('phase','intro'); set('phaseTimer',2);
-  set('P1Arme',1); set('P1ArmeOrig',1); set('BotArme',1); set('P1HP',200); set('BotHP',200);
-  const L=(n)=>S().lookupVariableByNameAndType(n,'list').value;
-  L('solArme')[0]=3; L('solX')[0]=-120; L('solY')[0]=-92; L('solTimer')[0]=0;
-  L('solArme')[1]=5; L('solX')[1]=120;  L('solY')[1]=-92; L('solTimer')[1]=0;
-  step(7); set('phase','fight'); set('P1State','idle'); set('BotState','idle');
-  set('P1X',-40); set('BotX',150); set('BotVitesse',0); step(3);
-  R.toPNG('out/s_sol.png');
-  // 6) écran de sauvegarde (code 18 chiffres)
+  // 5) boutique ARMES : arme possédée au niveau 5 (plus aucune arme au sol)
+  set('scene','shop'); set('shopPage',2); set('pieces',1000);
+  set('P1Arme',2); set('P1ArmeOrig',2); set('armeApercu',2);
+  S().lookupVariableByNameAndType('armePossede','list').value[1]=1;
+  S().lookupVariableByNameAndType('armeNiveau','list').value[1]=5;
+  step(7); R.toPNG('out/s_shop_armes.png');
+  // 6) écran de sauvegarde (code 24 chiffres)
   set('niveauMax',5); set('pieces',1234); set('P1Arme',5); set('P1ArmeOrig',5);
   L('armePossede')[4]=1;
   set('scene','menu'); souris(-400,-400,false); step(3);

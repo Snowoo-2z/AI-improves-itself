@@ -1,4 +1,4 @@
-// Smoke test : un round complet joué par les IA, jusqu'au résultat (armes au sol comprises).
+// Smoke test : un round complet joué par les IA, jusqu'au résultat (armes équipées et niveaux).
 const VM=require('scratch-vm'), fs=require('fs');
 const vm=new VM();
 vm.attachRenderer(new (require('./fakerender'))());
@@ -18,19 +18,17 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   // le joueur reste immobile : un bot agressif doit lui prendre les rounds
   set('BotAggro',80); set('BotGarde',40); set('BotReaction',12);
   step(10);
-  let ramassages=0, avant=L('solArme').slice();
   let fini=null;
   for(let i=0;i<9000 && !fini;i++){
     vm.runtime._step();
     if(i%900===0) console.log('   t='+i, 'phase', get('phase'), 'chrono', get('chrono'), 'hitStop', get('hitStop'), 'msg', JSON.stringify(get('message')));
-    const apres=L('solArme');
-    if(avant[0]!==apres[0]||avant[1]!==apres[1]){ ramassages++; avant=apres.slice(); }
     if(get('scene')==='result') fini=i;
   }
   console.log('combat terminé en', fini, 'images (', fini?Math.round(fini/30)+'s':'DÉPASSEMENT', ') | résultat =', get('resultat'), '| scène =', get('scene'),
               '| HP joueur', get('P1HP'), '/ bot', get('BotHP'));
-  console.log('changements d\'arme au sol :', ramassages, '| armes restantes :', JSON.stringify(L('solArme')),
-              '| arme bot =', get('BotArmeMain'), '| arme joueur =', get('P1ArmeMain'));
+  console.log('armes en main : bot =', get('BotArmeMain'), '(niv.', L('botArmeNiv')[get('niveau')-1], ') | joueur =',
+              get('P1ArmeMain'), '(niv.', L('armeNiveau')[get('P1ArmeMain')-1], ')',
+              '| sprites d\'armes au sol =', vm.runtime.targets.filter(t=>/ArmeSol/.test(t.sprite.name)).length);
   console.log('victoires joueur', get('victoiresP1'), '/ bot', get('victoiresBot'), '| pièces gagnées =', get('pieces'));
   process.exit(0);
 }).catch(e=>{console.error(e);process.exit(1)});

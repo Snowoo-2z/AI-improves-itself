@@ -17,15 +17,16 @@ ROUND_SECONDS = 60
 
 # ------------------------------------------------------------------ données de jeu
 BOTS = [
-    # nom, teinte, luminosité, PV, vitesse, aggro, garde, réaction, taille, arène, accessoire, arme de départ
-    ("Kid Bleu", 133, 0, 70, 3.2, 25, 10, 14, 85, "dojo", "aucun", 1),
-    ("Verdo", 67, 0, 85, 3.6, 35, 20, 12, 88, "dojo", "casquette", 1),
-    ("Sunny", 30, 10, 100, 4.0, 45, 30, 10, 90, "toits", "lunettes", 1),
-    ("Violette", 150, 0, 110, 4.4, 50, 40, 9, 92, "toits", "chat", 1),
-    ("Cyan-X", 100, 0, 120, 4.8, 60, 45, 8, 95, "volcan", "bandeau", 6),
-    ("Rosa", 178, 0, 130, 5.0, 65, 55, 7, 95, "volcan", "aureole", 5),
-    ("Ombre", 0, -70, 150, 5.4, 75, 60, 5, 100, "cyber", "cornes", 2),
-    ("Le Champion", 25, 20, 180, 5.8, 85, 70, 4, 108, "cyber", "couronne", 4),
+    # nom, teinte, luminosité, PV, vitesse, aggro, garde, réaction, taille, arène, accessoire,
+    # arme équipée, niveau de cette arme (1..5)
+    ("Kid Bleu", 133, 0, 70, 3.2, 25, 10, 14, 85, "dojo", "aucun", 1, 1),
+    ("Verdo", 67, 0, 85, 3.6, 35, 20, 12, 88, "dojo", "casquette", 1, 1),
+    ("Sunny", 30, 10, 100, 4.0, 45, 30, 10, 90, "toits", "lunettes", 1, 2),
+    ("Violette", 150, 0, 110, 4.4, 50, 40, 9, 92, "toits", "chat", 1, 2),
+    ("Cyan-X", 100, 0, 120, 4.8, 60, 45, 8, 95, "volcan", "bandeau", 6, 3),
+    ("Rosa", 178, 0, 130, 5.0, 65, 55, 7, 95, "volcan", "aureole", 5, 2),
+    ("Ombre", 0, -70, 150, 5.4, 75, 60, 5, 100, "cyber", "cornes", 2, 3),
+    ("Le Champion", 25, 20, 180, 5.8, 85, 70, 4, 108, "cyber", "couronne", 4, 4),
 ]
 ARENE_NOM = {"dojo": "Dojo", "toits": "Toits", "volcan": "Volcan", "cyber": "Cyber"}
 ACCS = [  # id, nom affiché, prix
@@ -42,25 +43,34 @@ KICK = dict(total=20, start=5, end=10, dmg=11, range=84)
 SPECIAL = dict(total=28, start=8, end=15, dmg=24, range=100)
 
 # ------------------------------------------------------------------ ARMES
-# Chaque arme modifie vraiment le combat : allonge, dégâts, vitesse de récupération,
-# spécial remplacé, garde renforcée, projectiles...
-#   nom, prix, costume, portee (+px sur poing et pied), dmgP, dmgK, totP, totK (frames totales),
-#   spe (0 frappe, 1 estoc, 2 charge, 3 marteau, 4 tir), speDmg, speTot, spePortee, garde, proj,
-#   ligne1, ligne2, ligne3 (description affichée dans la boutique)
+# Chaque arme change vraiment le combat (allonge, dégâts, vitesse, spécial, garde, projectiles).
+# Elle s'ACHÈTE en boutique puis s'AMÉLIORE de niveau 1 à 5 : chaque niveau au-dessus du 1er
+# ajoute incP / incK / incS points de dégâts et incR px d'allonge.
+#   nom, prix, costume, portee (+px poing/pied), dmgP, dmgK, totP, totK (images),
+#   spe (0 frappe, 1 estoc, 2 charge, 3 marteau), speDmg, speTot, spePortee, garde, proj,
+#   incP, incK, incS, incR, prixUpg (amélioration niveau L -> L+1 = prixUpg * L),
+#   ligne1 (effet), ligne2 (spécial), ligne3 (faiblesse)
 ARMES = [
-    ("Poings", 0, "fists", 0, 0, 0, 13, 20, 0, 24, 28, 100, 0, 0,
-     "Mains nues, équilibre total.", "Poing 7, pied 11, spécial 24.", "Aucun bonus, aucune faiblesse."),
-    ("Épée", 200, "epee", 48, 2, 2, 16, 24, 1, 26, 26, 128, 0, 0,
-     "Frappe vite et loin.", "Allonge +48 px, poing 9, pied 13.", "Récupération plus longue."),
-    ("Lance", 240, "lance", 72, -1, 0, 20, 30, 2, 30, 40, 168, 0, 0,
-     "La plus grande allonge.", "Poing 6, pied 11, portée énorme.", "Spécial CHARGE 30 qui fonce."),
-    ("Marteau", 280, "marteau", 32, 1, 2, 20, 32, 3, 34, 52, 112, 0, 0,
-     "Brise la garde, très lent.", "Spécial MARTEAU 34, ignore la garde.", "52 images : très punissable."),
-    ("Arc", 260, "arc", 22, -1, 0, 14, 24, 4, 30, 60, 150, 0, 1,
-     "Combat à distance.", "K tire une flèche (13 dégâts).", "Spécial : triple tir (3 x 10)."),
-    ("Bouclier", 220, "bouclier", -12, 1, -2, 16, 24, 0, 24, 28, 88, 1, 0,
-     "Bloque sans rien subir.", "Garde : 0 dégât (12 % sinon).", "Garde brisée : 20 % au lieu de 50 %."),
+    ("Poings", 0, "fists", 0, 0, 0, 13, 20, 0, 24, 28, 100, 0, 0, 1, 1, 2, 4, 30,
+     "Style de référence, sans défaut.", "Spécial : coup direct.",
+     "Aucune allonge bonus."),
+    ("Épée", 200, "epee", 48, 2, 2, 16, 24, 1, 26, 26, 128, 0, 0, 1, 1, 2, 8, 40,
+     "Frappe vite et loin.", "Spécial : estoc qui avance.",
+     "Récupération plus longue."),
+    ("Lance", 240, "lance", 72, -1, 0, 20, 30, 2, 30, 40, 168, 0, 0, 1, 1, 3, 8, 45,
+     "La plus grande allonge.", "Spécial : CHARGE qui fonce.",
+     "Poing faible au niveau 1."),
+    ("Marteau", 280, "marteau", 32, 1, 2, 20, 32, 3, 34, 52, 112, 0, 0, 1, 2, 4, 6, 50,
+     "Brise la garde (60 % des dégâts).", "Spécial : smash qui sonne.",
+     "Très lent : 52 images."),
+    ("Arc", 260, "arc", 22, -1, 2, 14, 24, 4, 10, 60, 150, 0, 1, 1, 2, 2, 4, 50,
+     "Combat à distance.", "Spécial : salve de 3 flèches.",
+     "Corps à corps faible."),
+    ("Bouclier", 220, "bouclier", -12, 1, -2, 16, 24, 0, 24, 28, 88, 1, 0, 1, 1, 2, 4, 40,
+     "Garde : 0 dégât subi.", "Garde brisée : 20 % au lieu de 50 %.",
+     "Allonge réduite."),
 ]
+ARME_NIVEAU_MAX = 5
 ARME_NOM = [a[0] for a in ARMES]
 ARME_PRIX = [a[1] for a in ARMES]
 ARME_COST = [a[2] for a in ARMES]
@@ -75,16 +85,16 @@ ARME_SPETOT = [a[10] for a in ARMES]
 ARME_SPEPORTEE = [a[11] for a in ARMES]
 ARME_GARDE = [a[12] for a in ARMES]
 ARME_PROJ = [a[13] for a in ARMES]
-ARME_L1 = [a[14] for a in ARMES]
-ARME_L2 = [a[15] for a in ARMES]
-ARME_L3 = [a[16] for a in ARMES]
+ARME_INCP = [a[14] for a in ARMES]
+ARME_INCK = [a[15] for a in ARMES]
+ARME_INCS = [a[16] for a in ARMES]
+ARME_INCR = [a[17] for a in ARMES]
+ARME_UPG = [a[18] for a in ARMES]
+ARME_L1 = [a[19] for a in ARMES]
+ARME_L2 = [a[20] for a in ARMES]
+ARME_L3 = [a[21] for a in ARMES]
 
-# points d'apparition des armes au sol (x, y) : au sol ou en l'air (saut nécessaire)
-SPAWNS = [(-185, GROUND), (185, GROUND), (-185, -8), (185, -8), (0, GROUND)]
-PICKUP_DELAI = 4 * FPS       # délai avant qu'une arme repousse dans un emplacement libre
 FLECHE_VITESSE = 11
-FLECHE_DMG = 13
-FLECHE_DMG_VOLLEY = 10
 
 COL = dict(
     panel="#141426", panel2="#1f1f38", accent="#ff3d6e", accent2="#7c4dff", ok="#2ecc71",
@@ -112,8 +122,8 @@ for v, d in [
     ("BotGarde", 20), ("BotReaction", 10), ("BotNom", ""), ("P1Vitesse", 4.5), ("comboP1", 0),
     ("dernierNiveauGagne", 0), ("P1Vis", 0), ("BotVis", 0), ("codeSauvegarde", ""), ("infoSauvegarde", ""), ("P1HitType", ""), ("BotHitType", ""),
     ("P1Arme", 1), ("BotArme", 1), ("P1ArmeOrig", 1), ("BotArmeOrig", 1), ("armeApercu", 1), ("shopPage", 1),
-    ("solTimer", 0), ("solLibre", 0), ("solProcheX", 0), ("flX", 0), ("flY", 0), ("flDir", 90), ("flWho", 1), ("flDmg", 13),
-    ("P1ArmeMain", 1), ("BotArmeMain", 1), ("armeMain", 1),
+    ("flX", 0), ("flY", 0), ("flDir", 90), ("flWho", 1), ("flDmg", 13),
+    ("P1ArmeMain", 1), ("BotArmeMain", 1), ("armeMain", 1), ("pNiv", 0), ("pNivTxt", "111111"),
 ]:
     S.add_var(v, d)
 
@@ -159,12 +169,13 @@ S.add_list("armeL1", ARME_L1)
 S.add_list("armeL2", ARME_L2)
 S.add_list("armeL3", ARME_L3)
 S.add_list("armePossede", [1] + [0] * (len(ARMES) - 1))
-S.add_list("solArme", [0, 0])          # 0 = emplacement vide, sinon index d'arme
-S.add_list("solX", [SPAWNS[0][0], SPAWNS[1][0]])
-S.add_list("solY", [SPAWNS[0][1], SPAWNS[1][1]])
-S.add_list("solTimer", [0, 0])
-S.add_list("spawnX", [p[0] for p in SPAWNS])
-S.add_list("spawnY", [p[1] for p in SPAWNS])
+S.add_list("armeNiveau", [1] * len(ARMES))          # niveau 1..5 de chaque arme (joueur)
+S.add_list("armeIncP", ARME_INCP)
+S.add_list("armeIncK", ARME_INCK)
+S.add_list("armeIncS", ARME_INCS)
+S.add_list("armeIncR", ARME_INCR)
+S.add_list("armeUpgBase", ARME_UPG)
+S.add_list("botArmeNiv", [b[12] for b in BOTS])
 
 # décors
 for name, svg in assets.backdrops().items():
@@ -203,9 +214,7 @@ def add_sounds(t, names):
 # ------------------------------------------------------------------ sprites
 # ordre des couches : les sprites créés plus tard sont dessinés devant, et leur boucle
 # tourne après celle des sprites créés avant (positions d'une image plus fraîches).
-# ArmeSol (fond) -> combattants -> accessoires (par-dessus la tête) -> FX/flèches -> Interface.
-arme1 = P.sprite("ArmeSol1")      # armes au sol (derrière tout le reste)
-arme2 = P.sprite("ArmeSol2")
+# Combattants -> accessoires (par-dessus la tête) -> FX/flèches -> Interface.
 joueur = P.sprite("Joueur")
 bot = P.sprite("Bot")
 accP1 = P.sprite("AccJoueur")      # accessoires de tête : devant les combattants
@@ -242,15 +251,6 @@ ui.add_costume("poings", assets.poing_icon_svg(), 60, 60)
 for wid in ARME_COST[1:]:
     ui.add_costume(wid, assets.weapon_icon_svg(wid), 60, 60)
 
-# armes au sol : mêmes icônes que le HUD (index de costume décalé de 1 : "poings" jamais au sol)
-for t in (arme1, arme2):
-    t.add_costume("poings", assets.poing_icon_svg(), 60, 60)
-    for wid in ARME_COST[1:]:
-        t.add_costume(wid, assets.weapon_icon_svg(wid), 60, 60)
-    t.visible = False
-add_sounds(arme1, ["coin"])
-add_sounds(arme2, ["coin"])
-
 # flèche de l'arc
 fleche.add_costume("fleche", assets.arrow_svg(), 38, 10)
 fleche.rotation_style = "all around"
@@ -262,7 +262,9 @@ add_sounds(ui, ["click", "coin", "win", "lose", "round", "ko"])
 # ================================================================== INTERFACE (moteur texte + écrans)
 U = ui
 for v in ["cx", "i", "ch", "prefix", "bx", "by", "bw", "bh", "hover", "k", "ratio", "px", "py", "col", "n",
-          "padded", "bits", "mult", "digits", "part", "somme", "ok", "pBitsArmes", "pArmeCode"]:
+          "padded", "bits", "mult", "digits", "part", "somme", "ok", "pBitsArmes", "pArmeCode", "pNivTxt",
+          # aperçu d'arme : valeurs courantes / niveau suivant
+          "dmP", "dmK", "dmS", "allg", "nxP", "nxK", "nxS", "nxR", "cout", "sA", "sB", "m", "lab"]:
     U.add_var(v, 0)
 
 # --- bloc : rect x y w h couleur transparence  (x = bord gauche, y = centre vertical, coins arrondis)
@@ -415,7 +417,38 @@ def icone_arme(arid, x, y, taille=30):
 
 
 
-# --- sauvegarde : code numérique  N PPPPP AAA SS A S CC  (15 chiffres, affiché par groupes)
+# --- bloc : apercuArme k   -> sA, sB (stats : niveau actuel -> suivant), cout (amélioration)
+U.script(define("apercuArme %s", ["k"], [
+    set_var("n", item("armeNiveau", arg("k"))),
+    set_var("m", sub(var("n"), 1)),                       # niveaux acquis au-dessus du 1er
+    set_var("dmP", add(add(PUNCH["dmg"], item("armeDmgP", arg("k"))), mul(var("m"), item("armeIncP", arg("k"))))),
+    set_var("dmK", add(add(KICK["dmg"], item("armeDmgK", arg("k"))), mul(var("m"), item("armeIncK", arg("k"))))),
+    set_var("dmS", add(item("armeSpeDmg", arg("k")), mul(var("m"), item("armeIncS", arg("k"))))),
+    set_var("allg", add(item("armePortee", arg("k")), mul(var("m"), item("armeIncR", arg("k"))))),
+    # valeurs du niveau suivant (identiques si l'arme est déjà au niveau maximum)
+    set_var("m", var("n")),
+    if_(ge(var("n"), ARME_NIVEAU_MAX), [set_var("m", sub(var("n"), 1))]),
+    set_var("nxP", add(add(PUNCH["dmg"], item("armeDmgP", arg("k"))), mul(var("m"), item("armeIncP", arg("k"))))),
+    set_var("nxK", add(add(KICK["dmg"], item("armeDmgK", arg("k"))), mul(var("m"), item("armeIncK", arg("k"))))),
+    set_var("nxS", add(item("armeSpeDmg", arg("k")), mul(var("m"), item("armeIncS", arg("k"))))),
+    set_var("nxR", add(item("armePortee", arg("k")), mul(var("m"), item("armeIncR", arg("k"))))),
+    # l'arc n'a pas de coup de pied : c'est la flèche qui part
+    set_var("lab", "Pied "),
+    if_(eq(item("armeProj", arg("k")), 1), [set_var("lab", "Flèche ")]),
+    if_else(lt(var("n"), ARME_NIVEAU_MAX), [
+        set_var("sA", join4("Poing ", var("dmP"), "  →  ",
+                            join4(var("nxP"), join("   ", var("lab")), var("dmK"), join("  →  ", var("nxK"))))),
+        set_var("sB", join4("Spé ", var("dmS"), "  →  ",
+                            join4(var("nxS"), "    Allonge +", var("allg"), join("  →  +", var("nxR"))))),
+    ], [
+        set_var("sA", join4("Poing ", var("dmP"), join("    ", var("lab")), var("dmK"))),
+        set_var("sB", join4("Spé ", var("dmS"), "    Allonge +", var("allg"))),
+    ]),
+    set_var("cout", mul(item("armeUpgBase", arg("k")), var("n"))),
+]))
+
+
+# --- sauvegarde : code numérique  N PPPPP AAA SS A S BB A NNNNNN CC  (24 chiffres, par groupes)
 U.script(define("pad %s %s", ["valeur", "longueur"], [
     set_var("padded", join(arg("valeur"), "")),
     repeat_until(ge(strlen(var("padded")), arg("longueur")), [set_var("padded", join("0", var("padded")))]),
@@ -428,11 +461,13 @@ U.script(define("extraire %s %s", ["debut", "longueur"], [
     set_var("part", add(var("part"), 0)),
 ]))
 
-U.script(define("checksum %s %s %s %s %s %s", ["a", "b", "c", "d", "e", "f"], [
+U.script(define("checksum %s %s %s %s %s %s %s", ["a", "b", "c", "d", "e", "f", "g"], [
     set_var("somme", add(mul(arg("a"), 3), add(mul(arg("b"), 7), add(mul(arg("c"), 11),
-                     add(mul(arg("d"), 13), add(mul(arg("e"), 17), mul(arg("f"), 19))))))),
+                     add(mul(arg("d"), 13), add(mul(arg("e"), 17), add(mul(arg("f"), 19),
+                     mul(arg("g"), 23)))))))),
     set_var("somme", mod(add(var("somme"), 29), 97)),
 ]))
+
 
 U.script(define("genererCode", [], [
     # bits accessoires / couleurs possédés
@@ -463,8 +498,16 @@ U.script(define("genererCode", [], [
     # index accessoire équipé
     set_var("n", 1), set_var("k", 1),
     repeat(len(ACCS), [if_(eq(item("accId", var("k")), var("P1Acc")), [set_var("n", var("k"))]), change_var("k", 1)]),
+    # niveaux des 6 armes (1 chiffre chacune) : ajoutés au code et à la somme de contrôle
+    set_var("pNivTxt", ""), set_var("k", 1),
+    repeat(len(ARMES), [
+        set_var("pNivTxt", join(var("pNivTxt"), item("armeNiveau", var("k")))),
+        change_var("k", 1),
+    ]),
+    set_var("pNiv", add(var("pNivTxt"), 0)),
     if_(gt(var("pieces"), 99999), [set_var("pieces", 99999)]),
-    call("checksum %s %s %s %s %s %s", var("niveauMax"), var("pieces"), var("px"), var("py"), var("n"), var("P1Skin")),
+    call("checksum %s %s %s %s %s %s %s", var("niveauMax"), var("pieces"), var("px"), var("py"), var("n"),
+         var("P1Skin"), var("pNiv")),
     set_var("codeSauvegarde", var("niveauMax")),
     call("pad %s %s", var("pieces"), 5), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
     call("pad %s %s", var("px"), 3), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
@@ -472,8 +515,9 @@ U.script(define("genererCode", [], [
     set_var("codeSauvegarde", join(var("codeSauvegarde"), join(var("n"), var("P1Skin")))),
     call("pad %s %s", var("pBitsArmes"), 2), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
     set_var("codeSauvegarde", join(var("codeSauvegarde"), var("pArmeCode"))),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), var("pNivTxt"))),
     call("pad %s %s", var("somme"), 2), set_var("codeSauvegarde", join(var("codeSauvegarde"), var("padded"))),
-    # groupes lisibles : 1-5-3-2-1-1-2-1-2
+    # groupes lisibles : 1-5-3-2-1-1-2-1-6-2
     set_var("digits", var("codeSauvegarde")),
     set_var("codeSauvegarde", ""),
     set_var("i", 1),
@@ -493,6 +537,8 @@ U.script(define("genererCode", [], [
     set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
     repeat(1, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
     set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
+    repeat(6, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
+    set_var("codeSauvegarde", join(var("codeSauvegarde"), "-")),
     repeat(2, [set_var("codeSauvegarde", join(var("codeSauvegarde"), letter(var("i"), var("digits")))), change_var("i", 1)]),
     list_clear("CODE DE SAUVEGARDE"),
     list_add("CODE DE SAUVEGARDE", var("codeSauvegarde")),
@@ -507,23 +553,35 @@ U.script(define("chargerCode %s", ["code"], [
         change_var("i", 1),
     ]),
     set_var("ok", 0),
-    if_(or_(eq(strlen(var("digits")), 18), eq(strlen(var("digits")), 15)), [
+    if_(or_(eq(strlen(var("digits")), 24), or_(eq(strlen(var("digits")), 18), eq(strlen(var("digits")), 15))), [
         call("extraire %s %s", 1, 1), set_var("bx", var("part")),      # niveauMax
         call("extraire %s %s", 2, 5), set_var("by", var("part")),      # pièces
         call("extraire %s %s", 7, 3), set_var("px", var("part")),      # bits acc
         call("extraire %s %s", 10, 2), set_var("py", var("part")),     # bits skins
         call("extraire %s %s", 12, 1), set_var("n", var("part")),      # acc équipé
         call("extraire %s %s", 13, 1), set_var("k", var("part")),      # skin équipé
-        # armes : présentes seulement dans le format à 18 chiffres
-        if_else(eq(strlen(var("digits")), 18), [
+        # armes (bits + équipée) : format 24 ou 18 chiffres ; niveaux : format 24 seulement
+        set_var("pNivTxt", "111111"), set_var("pNiv", 0),   # 0 = pas de niveaux dans le code
+        if_else(eq(strlen(var("digits")), 15), [
+            set_var("pBitsArmes", 0), set_var("pArmeCode", 0),
+            call("extraire %s %s", 14, 2), set_var("cx", var("part")),  # checksum (format d'origine)
+        ], [
             call("extraire %s %s", 14, 2), set_var("pBitsArmes", var("part")),
             call("extraire %s %s", 16, 1), set_var("pArmeCode", var("part")),
-            call("extraire %s %s", 17, 2), set_var("cx", var("part")),  # checksum
-        ], [
-            set_var("pBitsArmes", 0), set_var("pArmeCode", 0),
-            call("extraire %s %s", 14, 2), set_var("cx", var("part")),  # checksum (ancien format)
+            if_else(eq(strlen(var("digits")), 24), [
+                # niveaux des armes (6 chiffres) + checksum
+                set_var("pNivTxt", ""), set_var("i", 1),
+                repeat(len(ARMES), [
+                    set_var("pNivTxt", join(var("pNivTxt"), letter(add(var("i"), 16), var("digits")))),
+                    change_var("i", 1),
+                ]),
+                set_var("pNiv", add(var("pNivTxt"), 0)),
+                call("extraire %s %s", 23, 2), set_var("cx", var("part")),
+            ], [
+                call("extraire %s %s", 17, 2), set_var("cx", var("part")),
+            ]),
         ]),
-        call("checksum %s %s %s %s %s %s", var("bx"), var("by"), var("px"), var("py"), var("n"), var("k")),
+        call("checksum %s %s %s %s %s %s %s", var("bx"), var("by"), var("px"), var("py"), var("n"), var("k"), var("pNiv")),
         if_(and_(eq(var("somme"), var("cx")), and_(and_(gt(var("bx"), 0), lt(var("bx"), len(BOTS) + 1)),
                                                     and_(and_(gt(var("n"), 0), lt(var("n"), len(ACCS) + 1)),
                                                          and_(and_(gt(var("k"), 0), lt(var("k"), len(SKINS) + 1)),
@@ -548,6 +606,16 @@ U.script(define("chargerCode %s", ["code"], [
                 set_var("mult", mul(var("mult"), 2)), change_var("i", 1),
             ]),
             list_replace("armePossede", 1, 1),
+            # niveaux d'armes : lus dans le code (1 par défaut), bornés à 1..5
+            set_var("i", 1),
+            repeat(len(ARMES), [
+                set_var("part", letter(var("i"), var("pNivTxt"))),
+                set_var("part", add(var("part"), 0)),
+                if_(lt(var("part"), 1), [set_var("part", 1)]),
+                if_(gt(var("part"), ARME_NIVEAU_MAX), [set_var("part", ARME_NIVEAU_MAX)]),
+                list_replace("armeNiveau", var("i"), var("part")),
+                change_var("i", 1),
+            ]),
             set_var("P1Arme", add(var("pArmeCode"), 1)), set_var("P1ArmeOrig", var("P1Arme")), set_var("armeApercu", var("P1Arme")),
             set_var("P1Acc", item("accId", var("n"))),
             set_var("P1Skin", var("k")),
@@ -568,12 +636,12 @@ U.script(define("chargerCode %s", ["code"], [
 U.script(define("dessinerSauvegarde", [], [
     rect(-200, 10, 400, 260, COL["panel"], 15),
     ecrire("TON CODE DE SAUVEGARDE", 0, 100, 60, 30, 1),
-    rect(-196, 40, 392, 56, "#000000", 30),
-    # 18 chiffres + 8 tirets : on réduit la taille pour que le code tienne dans le cadre
-    ecrire(var("codeSauvegarde"), 0, 28, 54, -1, 1),
+    rect(-200, 40, 400, 56, "#000000", 30),
+    # 24 chiffres + 9 tirets : police adaptée pour que le code tienne dans le cadre
+    ecrire(var("codeSauvegarde"), 0, 28, 34, -1, 1),
     ecrire("Note ce code (ou copie-le dans la liste à l'écran).", 0, -10, 30, -1, 1),
     ecrire("Au prochain lancement : Menu, CHARGER, puis colle le code.", 0, -32, 30, -1, 1),
-    ecrire("Il contient : niveau max, pièces, arme équipée et cosmétiques.", 0, -60, 26, -2, 1),
+    ecrire("Il contient : niveau max, pièces, armes (niveaux inclus) et cosmétiques.", 0, -60, 24, -2, 1),
     bouton(0, -110, 160, 40, "RETOUR", "menu", COL["grey"], 42),
 ]))
 
@@ -611,8 +679,8 @@ U.script(define("dessinerCommandes", [], [
     ecrire("Flèche bas : garde. 12 % des dégâts, 0 avec le bouclier", 0, 18, 28, -1, 1),
     ecrire("En l'air, un pied ou un spécial brise la garde (50 % des dégâts).", 0, -4, 28, -2, 1),
     ecrire("J : poing  K : pied  L : SPÉCIAL (barre bleue pleine)", 0, -30, 34, 100, 1),
-    ecrire("Ramasse une arme au sol (mains nues) : portée, dégâts et", 0, -56, 30, 67, 1),
-    ecrire("spécial changent (perce-gardes, charge, tir, bouclier).", 0, -80, 30, 67, 1),
+    ecrire("Équipe une arme en boutique : portée, dégâts et spécial", 0, -56, 30, 67, 1),
+    ecrire("changent. Améliore-la jusqu'au niveau 5 pour la renforcer.", 0, -80, 28, 67, 1),
     ecrire("Gagne 2 rounds sur 3 pour remporter le combat !", 0, -106, 30, -2, 1),
     bouton(0, -150, 160, 40, "RETOUR", "menu", COL["grey"], 42),
 ]))
@@ -705,46 +773,60 @@ shop += [
 ]
 U.script(define("dessinerBoutique", [], shop))
 
-# ---------- page 2 : les armes
+# ---------- page 2 : les armes (achat, équipement, amélioration niveau 1..5)
 armes_shop = [
     rect(-240, 150, 480, 60, "#000000", 55),
     ecrire("ARMES", 0, 152, 64, 30, 1),
     ecrire(join(var("pieces"), " pièces"), 228, 152, 34, 30, 2),
     bouton(-180, 100, 84, 30, "LOOK", "tab1", COL["grey"], 26),
     bouton(-90, 100, 84, 30, "ARMES", "tab2", COL["ok"], 26),
-    # 6 armes en 3 x 2
+    # 6 armes en 3 x 2 ; le niveau est écrit dans le bouton des armes possédées
     set_var("k", 1),
 ]
 armes_shop.append(repeat(len(ARMES), [
     set_var("bx", add(-160, mul(mod(sub(var("k"), 1), 3), 160))),
-    set_var("by", sub(56, mul(floor(div(sub(var("k"), 1), 3)), 44))),
+    set_var("by", sub(70, mul(floor(div(sub(var("k"), 1), 3)), 37))),
     if_else(eq(item("armePossede", var("k")), 1), [
         if_else(eq(var("k"), var("P1Arme")), [
-            bouton(var("bx"), var("by"), 150, 36, item("armeNom", var("k")), join("arme", var("k")), COL["ok"], 32),
+            bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" niv.", item("armeNiveau", var("k")))),
+                   join("arme", var("k")), COL["ok"], 28),
         ], [
-            bouton(var("bx"), var("by"), 150, 36, item("armeNom", var("k")), join("arme", var("k")), COL["accent2"], 32),
+            bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" niv.", item("armeNiveau", var("k")))),
+                   join("arme", var("k")), COL["accent2"], 28),
         ]),
     ], [
-        bouton(var("bx"), var("by"), 150, 36, join(item("armeNom", var("k")), join(" ", item("armePrix", var("k")))),
-               join("arme", var("k")), COL["grey"], 30),
+        bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" ", item("armePrix", var("k")))),
+               join("arme", var("k")), COL["grey"], 28),
     ]),
     change_var("k", 1),
 ]))
 armes_shop += [
-    # panneau d'aperçu : à droite, sous la grille (le combattant d'aperçu reste à gauche)
-    rect(105, -78, 260, 110, COL["panel"], 12),
-    *icone_arme(var("armeApercu"), -8, -78, 46),
-    ecrire(item("armeNom", var("armeApercu")), 135, -36, 28, 30, 1),
-    ecrire(item("armeL1", var("armeApercu")), 135, -58, 24, -1, 1),
-    ecrire(item("armeL2", var("armeApercu")), 135, -79, 22, -1, 1),
-    ecrire(item("armeL3", var("armeApercu")), 135, -100, 20, -2, 1),
-    if_else(eq(var("P1Arme"), var("armeApercu")), [
-        ecrire("ÉQUIPÉE", 135, -122, 22, 67, 1),
+    # panneau d'aperçu : nom + niveau, stats (niveau courant -> suivant), effet, amélioration
+    rect(10, -63, 440, 142, COL["panel"], 12),
+    *icone_arme(var("armeApercu"), -195, -28, 44),
+    call("apercuArme %s", var("armeApercu")),
+    ecrire(join(item("armeNom", var("armeApercu")), join("   Niv. ", join(item("armeNiveau", var("armeApercu")), "/5"))),
+           -150, -6, 30, 30, 0),
+    ecrire(var("sA"), -150, -34, 22, -1, 0),
+    ecrire(var("sB"), -150, -56, 22, -1, 0),
+    ecrire(join(item("armeL1", var("armeApercu")), join(" ", item("armeL3", var("armeApercu")))),
+           -150, -80, 21, -2, 0),
+    if_else(and_(eq(item("armePossede", var("armeApercu")), 1), lt(item("armeNiveau", var("armeApercu")), ARME_NIVEAU_MAX)), [
+        bouton(60, -106, 340, 28, join("AMÉLIORER   ", join(var("cout"), " pièces")), "upg", COL["warn"], 24),
     ], [
         if_else(eq(item("armePossede", var("armeApercu")), 1), [
-            ecrire("Achetée : cliquer pour équiper", 135, -122, 20, 100, 1),
+            ecrire("NIVEAU MAX", 60, -106, 24, 67, 1),
         ], [
-            ecrire(join("Prix : ", join(item("armePrix", var("armeApercu")), " pièces")), 135, -122, 22, -2, 1),
+            ecrire(join("Achat : ", join(item("armePrix", var("armeApercu")), " pièces")), 60, -106, 24, -2, 1),
+        ]),
+    ]),
+    if_else(eq(var("P1Arme"), var("armeApercu")), [
+        ecrire("ÉQUIPÉE", 60, -130, 21, 67, 1),
+    ], [
+        if_else(eq(item("armePossede", var("armeApercu")), 1), [
+            ecrire("Achetée : cliquer pour équiper", 60, -130, 21, 100, 1),
+        ], [
+            ecrire("Cliquer sur l'arme pour l'acheter", 60, -130, 21, -2, 1),
         ]),
     ]),
     bouton(-150, -150, 150, 40, "RETOUR", "menu", COL["grey"], 42),
@@ -780,9 +862,11 @@ hud = [
     rect(-238, -171, 476, 36, "#000000", 55),
     rect(-238, -189, 476, 2, COL["grey"], 0),
     *icone_arme(var("P1ArmeMain"), -212, -170, 30),
-    ecrire(join("TOI : ", item("armeNom", var("P1ArmeMain"))), -180, -176, 30, -1, 0),
-    if_(eq(item("armeProj", var("P1ArmeMain")), 1), [ecrire("K : tir / L : salve", -180, -160, 24, 100, 0)]),
-    ecrire(join(var("BotNom"), join(" : ", item("armeNom", var("BotArmeMain")))), 180, -176, 30, -1, 2),
+    ecrire(join("TOI : ", join(item("armeNom", var("P1ArmeMain")), join(" niv.", item("armeNiveau", var("P1ArmeMain"))))),
+           -180, -176, 28, -1, 0),
+    if_(eq(item("armeProj", var("P1ArmeMain")), 1), [ecrire("K : tir / L : salve", -180, -160, 22, 100, 0)]),
+    ecrire(join(var("BotNom"), join(" : ", join(item("armeNom", var("BotArmeMain")),
+           join(" niv.", item("botArmeNiv", var("niveau")))))), 180, -176, 28, -1, 2),
     *icone_arme(var("BotArmeMain"), 212, -170, 30),
     if_(gt(var("comboP1"), 1), [
         ecrire(join(var("comboP1"), " HITS !"), -228, 80, 44, 30, 0),
@@ -827,21 +911,6 @@ res = [
 U.script(define("dessinerResultat", [], res))
 
 U.script(define("nouveauRound", [], [
-    # deux armes au sol, différentes, sur deux points d'apparition (au sol une fois sur deux)
-    set_var("k", 1),
-    repeat(2, [
-        list_replace("solArme", var("k"), random(2, len(ARMES))),
-        set_var("bx", add(1, mul(sub(var("k"), 1), 2))),
-        if_(eq(mod(var("round"), 2), 0), [set_var("bx", add(3, mul(sub(var("k"), 1), 2)))]),
-        list_replace("solX", var("k"), item("spawnX", var("bx"))),
-        list_replace("solY", var("k"), item("spawnY", var("bx"))),
-        list_replace("solTimer", var("k"), 0),
-        change_var("k", 1),
-    ]),
-    if_(eq(item("solArme", 1), item("solArme", 2)), [
-        # rotation dans 2..len(ARMES) : jamais la même arme, jamais d'indice hors table
-        list_replace("solArme", 2, add(mod(sub(item("solArme", 2), 1), sub(len(ARMES), 1)), 2)),
-    ]),
     set_var("P1HP", var("P1Max")), set_var("BotHP", var("BotMax")),
     set_var("P1Special", 0), set_var("BotSpecial", 0), set_var("P1Hit", 0), set_var("BotHit", 0),
     set_var("chrono", ROUND_SECONDS * FPS), set_var("comboP1", 0), set_var("hitStop", 0),
@@ -950,33 +1019,28 @@ click_logic = [
             ]),
         ]),
     ]),
+    # amélioration de l'arme affichée (niveau 1 -> 5, coût = prixUpg x niveau courant)
+    if_(eq(var("clic"), "upg"), [
+        set_var("k", var("armeApercu")),
+        set_var("n", item("armeNiveau", var("k"))),
+        set_var("cout", mul(item("armeUpgBase", var("k")), var("n"))),
+        if_else(and_(eq(item("armePossede", var("k")), 1), lt(var("n"), ARME_NIVEAU_MAX)), [
+            if_else(ge(var("pieces"), var("cout")), [
+                change_var("pieces", mul(-1, var("cout"))),
+                list_replace("armeNiveau", var("k"), add(var("n"), 1)),
+                play_sound("coin"),
+                set_var("fxType", "ring"), set_var("fxX", 60), set_var("fxY", -100), create_clone("FX"),
+            ], [
+                set_var("message", "Pas assez de pièces !"), set_var("phaseTimer", 40),
+            ]),
+        ], [set_var("message", "Niveau maximum !"), set_var("phaseTimer", 40)]),
+    ]),
 ]
 U.script(define("gererClic", [], click_logic))
 
 # --- logique de round (appelée chaque frame en combat)
 round_logic = [
     if_(gt(var("hitStop"), 0), [change_var("hitStop", -1)]),
-    # armes au sol : compte à rebours puis réapparition d'une arme aléatoire
-    if_(eq(var("phase"), "fight"), [
-        set_var("k", 1),
-        repeat(2, [
-            if_(and_(eq(item("solArme", var("k")), 0), gt(item("solTimer", var("k")), 0)), [
-                list_replace("solTimer", var("k"), sub(item("solTimer", var("k")), 1)),
-                if_(eq(item("solTimer", var("k")), 0), [
-                    set_var("solLibre", random(1, len(SPAWNS))),
-                    set_var("solProcheX", item("spawnX", var("solLibre"))),
-                    if_(or_(lt(abs_(sub(var("solProcheX"), var("P1X"))), 70),
-                            lt(abs_(sub(var("solProcheX"), var("BotX"))), 70)), [
-                        set_var("solLibre", random(1, len(SPAWNS))),
-                    ]),
-                    list_replace("solArme", var("k"), random(2, len(ARMES))),
-                    list_replace("solX", var("k"), item("spawnX", var("solLibre"))),
-                    list_replace("solY", var("k"), item("spawnY", var("solLibre"))),
-                ]),
-            ]),
-            change_var("k", 1),
-        ]),
-    ]),
     if_(eq(var("phase"), "intro"), [
         change_var("phaseTimer", -1),
         if_(eq(var("phaseTimer"), 0), [
@@ -1092,7 +1156,7 @@ U.script(
 def fighter_scripts(t, me, op, is_player):
     for v in ["vx", "vy", "timer", "hitDone", "anim", "iMove", "iJump", "iPunch", "iKick", "iSpecial", "iBlock",
               "aiTimer", "attaqueTenue", "dx", "f", "dmg", "portee", "aStart", "aEnd", "aTotal", "dist", "r",
-              "armeMain", "tirFait", "especeArme", "typeArme", "cibleX", "cibleY", "k"]:
+              "armeMain", "tirFait", "especeArme", "typeArme", "nivArme"]:
         t.add_var(v, 0)
 
     def V(n):
@@ -1103,6 +1167,13 @@ def fighter_scripts(t, me, op, is_player):
 
     def setV(n, val):
         return set_var(me + n, val)
+
+    # niveau (1..5) de l'arme en main : le joueur lit ses améliorations, le bot a le sien
+    NIV = (lambda: item("armeNiveau", V("Arme"))) if is_player else (lambda: item("botArmeNiv", var("niveau")))
+
+    def BOOST(inc_list):
+        """Bonus de niveau : (niveau - 1) x incrément de l'arme."""
+        return mul(sub(var("nivArme"), 1), item(inc_list, V("Arme")))
 
     def chV(n, val):
         return change_var(me + n, val)
@@ -1184,27 +1255,8 @@ def fighter_scripts(t, me, op, is_player):
                 ]),
             ]),
         ]
-        # --- priorité 1 : à mains nues, aller chercher une arme au sol
+        # --- avec un arc : garder ses distances et tirer
         intents += [
-            if_(and_(eq(V("Arme"), 1), or_(gt(item("solArme", 1), 0), gt(item("solArme", 2), 0))), [
-                set_var("cibleX", 0), set_var("cibleY", 0), set_var("r", 0),
-                if_(gt(item("solArme", 1), 0), [
-                    set_var("cibleX", item("solX", 1)), set_var("cibleY", item("solY", 1)), set_var("r", 1),
-                ]),
-                if_(gt(item("solArme", 2), 0), [
-                    if_else(or_(eq(var("r"), 0), lt(abs_(sub(item("solX", 2), V("X"))), abs_(sub(var("cibleX"), V("X"))))), [
-                        set_var("cibleX", item("solX", 2)), set_var("cibleY", item("solY", 2)),
-                    ], []),
-                ]),
-                if_(gt(var("dist"), 95), [
-                    set_var("iMove", 0),
-                    if_else(gt(var("cibleX"), add(V("X"), 12)), [set_var("iMove", 1)], [
-                        if_(lt(var("cibleX"), sub(V("X"), 12)), [set_var("iMove", -1)]),
-                    ]),
-                    if_(and_(gt(var("cibleY"), add(V("Y"), 55)), eq(V("Y"), GROUND)), [set_var("iJump", 1)]),
-                ]),
-            ]),
-            # --- priorité 2 : avec l'arc, garder ses distances et tirer
             if_(eq(item("armeProj", V("Arme")), 1), [
                 if_(lt(var("dist"), 120), [
                     if_else(gt(OV("X"), V("X")), [set_var("iMove", -1)], [set_var("iMove", 1)]),
@@ -1293,24 +1345,24 @@ def fighter_scripts(t, me, op, is_player):
                 if_(eq(state, "block"), [setV("State", "idle")]),
                 if_else(eq(var("iPunch"), 1), [
                     set_var("aTotal", item("armeTotP", V("Arme"))),
-                    set_var("dmg", add(PUNCH["dmg"], item("armeDmgP", V("Arme")))),
-                    set_var("portee", add(PUNCH["range"], item("armePortee", V("Arme")))),
+                    set_var("dmg", add(add(PUNCH["dmg"], item("armeDmgP", V("Arme"))), BOOST("armeIncP"))),
+                    set_var("portee", add(add(PUNCH["range"], item("armePortee", V("Arme"))), BOOST("armeIncR"))),
                     set_var("aStart", add(PUNCH["start"], sub(var("aTotal"), PUNCH["total"]))),
                     set_var("aEnd", add(PUNCH["end"], sub(var("aTotal"), PUNCH["total"]))),
                     setV("State", "punch"), set_var("timer", var("aTotal")), set_var("hitDone", 0),
                 ], [
                     if_else(eq(var("iKick"), 1), [
                         set_var("aTotal", item("armeTotK", V("Arme"))),
-                        set_var("dmg", add(KICK["dmg"], item("armeDmgK", V("Arme")))),
-                        set_var("portee", add(KICK["range"], item("armePortee", V("Arme")))),
+                        set_var("dmg", add(add(KICK["dmg"], item("armeDmgK", V("Arme"))), BOOST("armeIncK"))),
+                        set_var("portee", add(add(KICK["range"], item("armePortee", V("Arme"))), BOOST("armeIncR"))),
                         set_var("aStart", add(KICK["start"], sub(var("aTotal"), KICK["total"]))),
                         set_var("aEnd", add(KICK["end"], sub(var("aTotal"), KICK["total"]))),
                         setV("State", "kick"), set_var("timer", var("aTotal")), set_var("hitDone", 0),
                     ], [
                         if_else(and_(eq(var("iSpecial"), 1), eq(V("Special"), 100)), [
                             set_var("aTotal", item("armeSpeTot", V("Arme"))),
-                            set_var("dmg", item("armeSpeDmg", V("Arme"))),
-                            set_var("portee", item("armeSpePortee", V("Arme"))),
+                            set_var("dmg", add(item("armeSpeDmg", V("Arme")), BOOST("armeIncS"))),
+                            set_var("portee", add(item("armeSpePortee", V("Arme")), BOOST("armeIncR"))),
                             set_var("aStart", add(SPECIAL["start"], sub(var("aTotal"), SPECIAL["total"]))),
                             set_var("aEnd", add(SPECIAL["end"], sub(var("aTotal"), SPECIAL["total"]))),
                             set_var("tirFait", 0),
@@ -1343,14 +1395,14 @@ def fighter_scripts(t, me, op, is_player):
 
     # ----- résolution des attaques
 
-    def tirer(dmgval, hauteur=56):
+    def tirer(hauteur=56):
         """Tire une flèche : le sprite Fleche (clone) gère le vol et la collision."""
         return [
             set_var("flX", add(V("X"), mul(30, div(V("Dir"), 90)))),
             set_var("flY", add(V("Y"), hauteur)),
             set_var("flDir", V("Dir")),
             set_var("flWho", 1 if is_player else 2),
-            set_var("flDmg", dmgval),
+            set_var("flDmg", var("dmg")),
             create_clone("Fleche"),
             play_sound("tir"),
         ]
@@ -1365,14 +1417,14 @@ def fighter_scripts(t, me, op, is_player):
             if_else(and_(eq(item("armeProj", V("Arme")), 1), eq(name, "kick")), [
                 if_(and_(eq(var("hitDone"), 0), and_(ge(var("f"), var("aStart")), lt(var("f"), var("aEnd")))), [
                     set_var("hitDone", 1),
-                    *tirer(FLECHE_DMG),
+                    *tirer(),
                 ]),
             ], [
                 if_else(and_(eq(item("armeProj", V("Arme")), 1), eq(name, "special")), [
                     # 3 flèches espacées de 8 images : la fenêtre du spécial (20 images) en contient bien 3
                     if_(and_(lt(var("tirFait"), 3), ge(var("f"), add(var("aStart"), mul(var("tirFait"), 8)))), [
                         set_var("tirFait", add(var("tirFait"), 1)),
-                        *tirer(FLECHE_DMG_VOLLEY),
+                        *tirer(),
                     ]),
                 ], [
                     if_(and_(eq(var("hitDone"), 0), and_(ge(var("f"), var("aStart")), lt(var("f"), var("aEnd")))), [
@@ -1396,29 +1448,6 @@ def fighter_scripts(t, me, op, is_player):
 
     attacks = [attack_block("punch", PUNCH), attack_block("kick", KICK),
                attack_block("special", SPECIAL, hittype="special")]
-
-    # ----- ramassage d'une arme au sol (seulement à mains nues : l'arme équipée reste)
-    # les deux emplacements sont déroulés : aucune boucle ne doit rendre la main dans le combat
-    def slot_ramassage(k):
-        return if_(gt(item("solArme", k), 0), [
-            if_(and_(lt(abs_(sub(V("X"), item("solX", k))), 42),
-                     lt(abs_(sub(V("Y"), item("solY", k))), 84)), [
-                setV("Arme", item("solArme", k)),
-                list_replace("solArme", k, 0),
-                list_replace("solTimer", k, PICKUP_DELAI),
-                play_sound("coin"),
-                set_var("fxType", "ring"),
-                set_var("fxX", V("X")), set_var("fxY", add(V("Y"), 55)),
-                create_clone("FX"),
-            ]),
-        ])
-
-    ramassage = [
-        if_(eq(V("Arme"), 1), [
-            slot_ramassage(1),
-            slot_ramassage(2),
-        ]),
-    ]
 
     # ----- physique
     physics = [
@@ -1529,19 +1558,24 @@ def fighter_scripts(t, me, op, is_player):
             ]),
         ]
 
+    # garde-fou (bots) : un numéro d'adversaire hors bornes donnerait un niveau d'arme négatif
+    garde_niveau = [] if is_player else [
+        if_(or_(lt(var("niveau"), 1), gt(var("niveau"), len(BOTS))), [set_var("niveau", 1)]),
+    ]
     t.script(
         when_flag(),
         set_rotation_style("left-right"),
         setV("Hit", 0), setV("State", "idle"),
         set_var("anim", 0),
         forever([
+            *garde_niveau,
             if_(eq(var("scene"), "fight"), [show(), setV("Vis", 1)] + ([setV("Size", 85)] if is_player else [])),
             if_(eq(var("scene"), "result"), [hide(), setV("Vis", 0)]),
             if_(eq(var("scene"), "fight"), [
                 if_(and_(eq(var("phase"), "fight"), eq(var("hitStop"), 0)), [
+                    set_var("nivArme", NIV()),
                     *take_hit,
                     *intents,
-                    *ramassage,
                     *start_actions,
                     *attacks,
                 ]),
@@ -1621,27 +1655,7 @@ fx.script(
     delete_clone(),
 )
 
-# ================================================================== ARMES AU SOL / FLÈCHES
-def arme_sol_scripts(t, slot):
-    t.add_var("k", 0)
-    t.script(
-        when_flag(),
-        hide(),
-        forever([
-            if_else(and_(eq(var("scene"), "fight"), gt(item("solArme", slot), 0)), [
-                switch_costume(item("solArme", slot)),
-                set_size(58),
-                goto_xy(item("solX", slot),
-                        add(item("solY", slot), mul(6, mathop("sin", mul(var("frame"), 6))))),
-                show(),
-            ], [hide()]),
-        ]),
-    )
-
-
-arme_sol_scripts(arme1, 1)
-arme_sol_scripts(arme2, 2)
-
+# ================================================================== FLÈCHES
 for v, d in [("x", 0), ("y", 0), ("vx", 0), ("who", 1), ("dmg", 0), ("life", 0)]:
     fleche.add_var(v, d)
 fleche.script(when_flag(), hide())

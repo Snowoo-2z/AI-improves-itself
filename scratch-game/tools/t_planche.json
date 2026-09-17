@@ -1,18 +1,166 @@
-{"steps":[
- {},
- {"name":"shop_armes","set":{"scene":"shop","shopPage":2,"pieces":1000,"P1Arme":1,"P1ArmeOrig":1,"armeApercu":1},"wait":6,"shot":"v_shop_armes"},
- {"name":"survol_marteau","mouse":[-160,12],"wait":6,"shot":"v_shop_marteau"},
- {"name":"combat_marteau","set":{"scene":"fight","phase":"intro","phaseTimer":2,"chrono":600,"P1HP":200,"BotHP":200,"P1Max":200,"BotMax":200,"P1Arme":4,"BotArme":2,"P1Special":100},"wait":8},
- {"set":{"phase":"fight","P1State":"idle","BotState":"idle","P1X":-150,"BotX":-60,"P1Y":-92,"BotY":-92,"BotReaction":600,"BotAggro":0,"BotVitesse":0},"wait":2},
- {"hold":"l","frames":5},
- {"loop":{"frames":60,"each":{"set":{"BotX":-60,"P1X":-150}},"stop":"BotHP<200"},"wait":4,"shot":"v_marteau"},
- {"name":"combat_arc","set":{"scene":"fight","phase":"intro","phaseTimer":2,"chrono":600,"P1HP":200,"BotHP":200,"P1Arme":5,"BotArme":6,"P1Special":0},"wait":8},
- {"set":{"phase":"fight","P1State":"idle","BotState":"idle","P1X":-170,"BotX":60,"BotY":-92,"BotReaction":300,"BotAggro":0,"BotVitesse":0},"wait":2},
- {"hold":"k","frames":5},
- {"loop":{"frames":14,"each":{"set":{"BotX":60,"P1X":-170}}},"shot":"v_fleche"},
- {"name":"arme_au_sol","set":{"scene":"fight","phase":"intro","phaseTimer":2,"P1HP":200,"BotHP":200,"P1Arme":1,"P1ArmeOrig":1,"BotArme":1},"wait":8},
- {"list":{"solArme":[3,5],"solX":[-120,120],"solY":[-92,-92],"solTimer":[0,0]}},
- {"set":{"phase":"fight","P1State":"idle","BotState":"idle","P1X":-40,"BotX":150,"BotVitesse":0},"wait":3,"shot":"v_sol"},
- {"name":"sauvegarde","set":{"niveauMax":5,"pieces":1234,"P1Arme":5,"P1ArmeOrig":5,"scene":"menu"},"wait":4},
- {"mouse":[28,-112],"down":true},{"mouse":[28,-112],"down":false,"wait":5,"shot":"v_code","dump":["scene","codeSauvegarde"]}
-]}
+{
+ "steps": [
+  {},
+  {
+   "name": "shop_armes",
+   "set": {
+    "scene": "shop",
+    "shopPage": 2,
+    "pieces": 1000,
+    "P1Arme": 1,
+    "P1ArmeOrig": 1,
+    "armeApercu": 1
+   },
+   "wait": 6,
+   "shot": "v_shop_armes"
+  },
+  {
+   "name": "survol_marteau",
+   "mouse": [
+    -160,
+    33
+   ],
+   "wait": 6,
+   "shot": "v_shop_marteau"
+  },
+  {
+   "name": "combat_marteau",
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 4,
+    "BotArme": 2,
+    "P1Special": 100
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -150,
+    "BotX": -60,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 600,
+    "BotAggro": 0,
+    "BotVitesse": 0
+   },
+   "wait": 2
+  },
+  {
+   "hold": "l",
+   "frames": 5
+  },
+  {
+   "loop": {
+    "frames": 60,
+    "each": {
+     "set": {
+      "BotX": -60,
+      "P1X": -150
+     }
+    },
+    "stop": "BotHP<200"
+   },
+   "wait": 4,
+   "shot": "v_marteau"
+  },
+  {
+   "name": "combat_arc",
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Arme": 5,
+    "BotArme": 6,
+    "P1Special": 0
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -170,
+    "BotX": 60,
+    "BotY": -92,
+    "BotReaction": 300,
+    "BotAggro": 0,
+    "BotVitesse": 0
+   },
+   "wait": 2
+  },
+  {
+   "hold": "k",
+   "frames": 5
+  },
+  {
+   "loop": {
+    "frames": 14,
+    "each": {
+     "set": {
+      "BotX": 60,
+      "P1X": -170
+     }
+    }
+   },
+   "shot": "v_fleche"
+  },
+  {
+   "name": "boutique_niveaux",
+   "set": {
+    "scene": "shop",
+    "shopPage": 2,
+    "pieces": 1000,
+    "P1Arme": 2,
+    "P1ArmeOrig": 2,
+    "armeApercu": 2
+   },
+   "wait": 6,
+   "shot": "v_shop_niveaux"
+  },
+  {
+   "name": "sauvegarde",
+   "set": {
+    "niveauMax": 5,
+    "pieces": 1234,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5,
+    "scene": "menu"
+   },
+   "wait": 4
+  },
+  {
+   "mouse": [
+    28,
+    -112
+   ],
+   "down": true
+  },
+  {
+   "mouse": [
+    28,
+    -112
+   ],
+   "down": false,
+   "wait": 5,
+   "shot": "v_code",
+   "dump": [
+    "scene",
+    "codeSauvegarde"
+   ]
+  }
+ ]
+}
