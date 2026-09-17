@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Colab — recherche web — AI-improves-itself</title>
+  <title>Colab — recherche & analyse — AI-improves-itself</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230a0e12'/%3E%3Cg fill='none' stroke='%235eead4' stroke-width='1.6'%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8'/%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8' transform='rotate(60 12 12)'/%3E%3Cellipse cx='12' cy='12' rx='9' ry='3.8' transform='rotate(120 12 12)'/%3E%3C/g%3E%3Ccircle cx='12' cy='12' r='1.6' fill='%235eead4'/%3E%3C/svg%3E" />
 </head>
@@ -24,22 +24,23 @@
 
   <main class="page">
     <section class="hero">
-      <h1>Colab — recherche web</h1>
+      <h1>Colab — recherche web & analyse</h1>
       <p class="sub">
         Quand l'IA a besoin d'informations, elle programme des <b>tâches</b> (skill
-        <code>add_research_task</code>). Le <b>notebook Colab</b> (script mis à jour par l'IA via ces tâches —
-        « j'ai besoin de vérifier X » → nouvelle tâche dans la file du serveur) les exécute, et les
+        <code>add_research_task</code>). Le <b>notebook de recherche</b> (<code>main.ipynb</code>) les exécute, et les
         résultats reviennent ici pour que l'IA les étudie. Chaque résultat est ensuite
         <b>structuré puis vérifié</b> par le site (2 appels IA, sans clé dans Colab) avant d'être
         inscrit dans la base de connaissances. Chaque tâche — créée par l'IA <em>ou</em> par un
         humain — est aussi synchronisée dans le repo GitHub de données (voir
         <a href="/docs/GITHUB-BACKEND.md">la doc backend</a>).
+        Un second notebook, l'<b>analyseur de discussions</b> (<code>analyze_discussions.ipynb</code>),
+        vérifie automatiquement les informations de vos conversations web et met à jour la base.
       </p>
     </section>
 
     <div class="flow" style="margin-bottom:18px">
       <div class="step"><div class="num">01</div><b>L'IA programme</b><div class="small muted">« Je dois vérifier X » → tâche search/fetch dans la file.</div></div>
-      <div class="step"><div class="num">02</div><b>Exécution</b><div class="small muted">Notebook Colab (<code>colab/main.ipynb</code>).</div></div>
+      <div class="step"><div class="num">02</div><b>Exécution</b><div class="small muted">Notebooks Colab : <code>main.ipynb</code> (recherche) ou <code>analyze_discussions.ipynb</code> (analyse).</div></div>
       <div class="step"><div class="num">03</div><b>Retour & étude</b><div class="small muted">Résultats poussés via <code>POST /api/research/results</code> → le site structure puis vérifie (2 appels IA) et ajoute à la base <code>/data</code> si validé.</div></div>
     </div>
 
@@ -67,7 +68,7 @@
           </form>
         </div>
         <div class="card">
-          <h3>Notebook Colab</h3>
+          <h3>Notebook de recherche</h3>
           <div class="small muted" style="margin-bottom:10px">
             Le script <code>colab/main.py</code> récupère les tâches depuis l'API du serveur
             (source de vérité : la base de données), exécute les <code>pending</code>,
@@ -77,6 +78,19 @@
           <div class="small muted" style="margin-top:10px">
             Astuce Colab : <em>File → Open notebook… → Colab</em> sur le fichier du repo (ou
             <code>!cp</code> dans un notebook vierge). Les tâches exécutées passent à <code>done</code>.
+          </div>
+        </div>
+        <div class="card">
+          <h3>Analyseur de discussions</h3>
+          <div class="small muted" style="margin-bottom:10px">
+            Le script <code>colab/analyze_discussions.py</code> vérifie automatiquement les
+            informations de vos discussions web : extraction des affirmations (Mistral),
+            recherche de sources, verdict sourcé, puis mise à jour de la base de connaissances.
+          </div>
+          <a class="btn ghost" href="/colab-notebook/analyze_discussions.ipynb" target="_blank">Ouvrir le notebook</a>
+          <div class="small muted" style="margin-top:10px">
+            Nécessite une clé Mistral (saisie masquée, RAM seule). Exportez vos discussions
+            avec le bouton 📤 de la barre du haut, puis collez la ligne base64 dans Colab.
           </div>
         </div>
       </aside>
