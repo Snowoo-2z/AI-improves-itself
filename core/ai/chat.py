@@ -40,18 +40,83 @@ _DATE_RULE = (
     "défaut que j'ai commis (question « dernier Zelda » → réponse avec le Zelda de 1986)."
 )
 
-THINKING_DIRECTIVE = (
-    "\n\n---\n\n"
-    "## MODE PENSÉE / THINKING (ACTIVÉ)\n"
-    "Avant de formuler ta réponse finale, explicite l'intégralité de ta réflexion et de ton raisonnement "
-    "pas à pas à l'intérieur d'un bloc balisé <think>...</think>.\n"
-    "Dans ce bloc :\n"
-    "- Décompose et analyse la demande de l'utilisateur.\n"
-    "- Détermine la meilleure stratégie, les outils nécessaires si besoin, et les étapes logiques.\n"
-    "- Valide la cohérence et l'exactitude des faits avant de formuler la réponse.\n"
-    "Referme impérativement la balise avec </think>, puis formule directement ta réponse finale "
-    "à destination de l'utilisateur en dehors de ces balises."
-)
+# Niveaux d'effort de réflexion du Mode Pensée (choisi en bas de la barre de
+# chat, façon Claude) : 'low' (vérification courte), 'medium' (pas à pas,
+# comportement historique de thinking=True), 'high' (raisonnement approfondi).
+THINKING_EFFORTS = ("low", "medium", "high")
+THINKING_MARKER = "MODE PENSÉE / THINKING (ACTIVÉ)"
+
+
+def normalize_thinking(value: bool | str | None) -> str:
+    """Réglage du mode pensée → effort : "off" | "low" | "medium" | "high".
+
+    Compatible avec l'API historique booléenne : `True` ⇒ "medium", `False` ⇒ "off".
+    Les valeurs inconnues tombent prudemment sur "off".
+    """
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in THINKING_EFFORTS:
+            return v
+        if v in ("on", "true", "active", "activé", "yes", "1"):
+            return "medium"
+        return "off"
+    if value is True:
+        return "medium"
+    return "off"
+
+
+def _thinking_directive(effort: str) -> str | None:
+    """Directive de prompt injectée selon l'effort choisi (None si "off").
+
+    Toutes les directives partagent le marqueur `THINKING_MARKER` : le mode démo
+    (LocalDemoProvider) et les tests s'y appuient pour détecter le mode pensée.
+    """
+    effort = normalize_thinking(effort)
+    if effort == "low":
+        return (
+            "\n\n---\n\n"
+            f"## {THINKING_MARKER}\n"
+            "Effort de réflexion : **FAIBLE**.\n"
+            "Avant de répondre, note en 2 à 4 phrases ta stratégie dans un bloc balisé "
+            "<think>...</think> : l'essentiel de la demande et la réponse envisagée.\n"
+            "Referme impérativement la balise avec </think>, puis formule directement ta réponse "
+            "finale à destination de l'utilisateur en dehors de ces balises."
+        )
+    if effort == "high":
+        return (
+            "\n\n---\n\n"
+            f"## {THINKING_MARKER}\n"
+            "Effort de réflexion : **ÉLEVÉ**.\n"
+            "Avant de formuler ta réponse finale, consacre un raisonnement approfondi, long et "
+            "structuré à l'intérieur d'un bloc balisé <think>...</think> (plus long qu'en effort moyen).\n"
+            "Dans ce bloc :\n"
+            "- Décompose la demande en sous-problèmes et explicite tes hypothèses.\n"
+            "- Explore plusieurs stratégies ou angles possibles, pèse avantages et limites, puis "
+            "choisis la meilleure.\n"
+            "- Vérifie chaque étape : exactitude des faits, cohérence logique, cas limites.\n"
+            "- Anticipe les faiblesses de la réponse projetée et corrige-les avant de la formuler.\n"
+            "Referme impérativement la balise avec </think>, puis formule directement ta réponse "
+            "finale à destination de l'utilisateur en dehors de ces balises."
+        )
+    if effort == "medium":
+        return (
+            "\n\n---\n\n"
+            f"## {THINKING_MARKER}\n"
+            "Effort de réflexion : **MOYEN**.\n"
+            "Avant de formuler ta réponse finale, explicite l'intégralité de ta réflexion et de ton "
+            "raisonnement pas à pas à l'intérieur d'un bloc balisé <think>...</think>.\n"
+            "Dans ce bloc :\n"
+            "- Décompose et analyse la demande de l'utilisateur.\n"
+            "- Détermine la meilleure stratégie, les outils nécessaires si besoin, et les étapes logiques.\n"
+            "- Valide la cohérence et l'exactitude des faits avant de formuler la réponse.\n"
+            "Referme impérativement la balise avec </think>, puis formule directement ta réponse "
+            "finale à destination de l'utilisateur en dehors de ces balises."
+        )
+    return None
+
+
+# Compatibilité arrière : la directive moyenne (comportement historique thinking=True).
+THINKING_DIRECTIVE = _thinking_directive("medium")
 
 
 def _extract_thinking(raw: str) -> tuple[str, str | None]:
@@ -167,17 +232,24 @@ def _tool_message_for(tc: dict) -> dict | None:
     }
 
 
-def _build_state(history: list[dict], thinking: bool = False) -> dict:
-    """Prépare le tour : prompt choisi, messages système, outils, compteurs."""
+def _build_state(history: list[dict], thinking: bool | str = False) -> dict:
+    """Prépare le tour : prompt choisi, messages système, outils, compteurs.
+
+    `thinking` accepte l'historique booléen (`True`/`False`) ou un effort
+    ("low" / "medium" / "high" / "off") — voir `normalize_thinking`.
+    """
     _seed_stores()
     user_text = _last_user_text(history)
     chosen = registry.select_for_user_input(user_text)
     system = registry.assemble_system_prompt(chosen)
-    if thinking:
-        system += THINKING_DIRECTIVE
+    effort = normalize_thinking(thinking)
+    directive = _thinking_directive(effort)
+    if directive:
+        system += directive
     return {
         "user_text": user_text,
         "thinking": thinking,
+        "thinking_effort": effort,
         "chosen": chosen,
         "system": system,
         "messages": [{"role": "system", "content": system}, *history],
@@ -364,11 +436,11 @@ def _next_retry_fields() -> dict:
     }
 
 
-def _live_turn(history: list[dict], thinking: bool = False) -> Iterator[dict]:
+def _live_turn(history: list[dict], thinking: bool | str = False) -> Iterator[dict]:
     """Un tour de chat en streaming, identique sur le plan logique à `handle_chat`.
 
     Produit des événements `{type: "token", content, provider, model, first}`
-    puis UN événement final `{type: "done", reply, thinking, provider, model, events, ...}`.
+    puis UN événement final `{type: "done", reply, thinking, thinking_effort, ...}`.
     """
     state = _build_state(history, thinking=thinking)
     history_n = len(history)
@@ -494,6 +566,7 @@ def _finalize_done(state: dict, reply: str, history_n: int, extra: dict | None =
     out: dict = {
         "reply": final_reply,
         "thinking": extracted_thinking,
+        "thinking_effort": state.get("thinking_effort", "off"),
         "provider": state["provider"],
         "model": state["model"],
         "events": events,
@@ -509,10 +582,12 @@ def _finalize_done(state: dict, reply: str, history_n: int, extra: dict | None =
     return out
 
 
-def handle_chat(history: list[dict], thinking: bool = False) -> dict:
+def handle_chat(history: list[dict], thinking: bool | str = False) -> dict:
     """Traiter une conversation (l'ensemble du historique est envoyé par le site).
 
-    Retourne : { reply, thinking, provider, events: [{type: tool|prompt_update, ...}], system_assembled: bool }
+    `thinking` : booléen historique (`True`/`False`) ou effort "low"/"medium"/"high"/"off".
+
+    Retourne : { reply, thinking, thinking_effort, provider, events: [{type: tool|prompt_update, ...}] }
     """
     state = _build_state(history, thinking=thinking)
     history_n = len(history)

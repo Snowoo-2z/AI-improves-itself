@@ -27,6 +27,12 @@ STUDY_MAX_CHARS = 5000
 #: vérification incluse).
 MIN_CONFIDENCE = 0.55
 
+#: Filet anti-perte du pipeline : si le moteur d'analyse est en repos (429/quota)
+#: quand le push Colab arrive, l'étude est marquée `retryable` et ré-essayée
+#: automatiquement (cooldown + plafond de tentatives) aux prochains événements.
+RETRY_COOLDOWN_S = 1800  # 30 min entre deux tentatives automatiques
+RETRY_MAX_ATTEMPTS = 5
+
 
 def create_task(kind: str, target: str, reason: str = "", by: str = "human") -> dict:
     if kind not in ("search", "fetch", "note", "deep"):
@@ -62,6 +68,13 @@ def add_result(
         # arrière-plan, le bilan `study` est réécrit sur l'item une fois fini
         # (visible sur /colab au refresh).
         _spawn_study(item, force=force_study)
+        # Un push Colab est un bon moment pour ré-étudier les résultats
+        # précédents dont l'étude avait échoué par transitoire (moteur en
+        # repos) : c'est ce filet qui évite que l'info « se perde ».
+        try:
+            retry_stale_studies()
+        except Exception:  # noqa: BLE001 — la ré-étude ne casse jamais le push
+            pass
     return item
 
 
@@ -69,10 +82,14 @@ def _spawn_study(item: dict, *, force: bool) -> None:
     import threading
 
     def _run() -> None:
+        prev = item.get("study") or {}
         try:
             outcome = study_result(item, force=force)
         except Exception as exc:  # noqa: BLE001 — l'étude ne casse jamais le site
-            outcome = {"status": "error", "reason": f"étude impossible : {exc}"}
+            outcome = {"status": "error", "reason": f"étude impossible : {exc}", "retryable": True}
+        outcome.setdefault("retryable", False)
+        outcome["retried_at"] = time.time()
+        outcome["retries"] = int(prev.get("retries", 0) or 0) + 1
         try:
             store_module.get_store().update("research_results", item.get("id"), {"study": outcome})
         except Exception:  # noqa: BLE001
@@ -80,6 +97,41 @@ def _spawn_study(item: dict, *, force: bool) -> None:
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
+
+
+def retry_stale_studies() -> int:
+    """Ré-étudie automatiquement les résultats dont l'étude a échoué TRANSITOIREMENT.
+
+    C'est le filet anti-perte du pipeline de recherche : si le moteur d'analyse
+    était en repos (429/quota/démo locale) quand le résultat de Colab est arrivé,
+    l'entrée n'a jamais atteint la base de connaissances — l'info restait « perdue »
+    pour l'IA. On la ré-essaie ici (cooldown de `RETRY_COOLDOWN_S`, plafond de
+    `RETRY_MAX_ATTEMPTS`) à chaque événement déclencheur :
+      - nouveau push Colab (`add_result`),
+      - lecture des résultats par l'IA (skill `list_research_results`),
+      - bouton « Ré-étudier » de la page /colab (endpoint dédié).
+    Retourne le nombre de ré-études planifiées.
+    """
+    s = store_module.get_store()
+    now = time.time()
+    retried = 0
+    try:
+        items = s.list("research_results")
+    except Exception:  # noqa: BLE001
+        return 0
+    for item in items:
+        st = item.get("study") or {}
+        if st.get("status") not in ("skipped", "error"):
+            continue
+        if not st.get("retryable"):
+            continue  # rejet / doublon / contenu vide : ré-essayer ne changerait rien
+        if int(st.get("retries", 0) or 0) >= RETRY_MAX_ATTEMPTS:
+            continue
+        if now - float(st.get("retried_at", 0) or 0) < RETRY_COOLDOWN_S:
+            continue
+        _spawn_study(item, force=False)
+        retried += 1
+    return retried
 
 
 def mark_task(task_id: str, status: str) -> dict | None:
@@ -294,10 +346,23 @@ def study_result(result: dict, *, force: bool = False) -> dict:
     )
     content, provider = _asks_llm(_SYSTEM_DRAFT, draft_user)
     if content is None:
-        return {"status": "skipped", "reason": "parler du moteur indisponible (démo locale ?)" if provider == "demo-local" else "analyseur indisponible"}
+        # Échec TRANSITOIRE : le moteur d'analyse était en repos (429/quota) ou
+        # seul la démo locale répond. Le résultat brut reste exploitable →
+        # l'étude sera ré-essayée automatiquement (voir `retry_stale_studies`).
+        reason = (
+            "moteur d'analyse indisponible (démo locale)"
+            if provider == "demo-local"
+            else "moteur d'analyse indisponible (tous les moteurs en repos)"
+        )
+        return {"status": "skipped", "reason": reason, "provider": provider, "retryable": True}
     draft = _extract_json(content)
     if not isinstance(draft, dict):
-        return {"status": "skipped", "reason": "sortie du moteur non structurable", "provider": provider}
+        return {
+            "status": "skipped",
+            "reason": "sortie du moteur non structurable",
+            "provider": provider,
+            "retryable": True,  # un moteur qui répond n'importe quoi : ré-essayer ailleurs
+        }
     if draft.get("ok") is False and not draft.get("title"):
         return {
             "status": "skipped",
@@ -349,7 +414,7 @@ def study_result(result: dict, *, force: bool = False) -> dict:
     try:
         store_module.get_store().add("knowledge", entry)
     except Exception as exc:  # noqa: BLE001
-        return {"status": "error", "reason": f"écriture impossible : {exc}"}
+        return {"status": "error", "reason": f"écriture impossible : {exc}", "retryable": True}
 
     return {
         "status": "added",

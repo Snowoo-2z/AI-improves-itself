@@ -52,6 +52,21 @@ async function renderResults() {
       </details>`
     )
     .join("");
+  wrap.querySelectorAll("[data-restudy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "🧠 Ré-étude lancée…";
+      try {
+        await apiPost(`/api/research/results/${btn.dataset.restudy}/study`, {});
+        toast("Étude relancée ✅ — le bilan s'actualise dans un instant");
+        setTimeout(renderResults, 2500);
+      } catch (err) {
+        toast(err.message, true);
+        btn.disabled = false;
+        btn.textContent = "🧠 Ré-étudier maintenant";
+      }
+    });
+  });
 }
 
 /* Bilan de l'étude IA (structuration + vérification → écriture dans /data). */
@@ -77,6 +92,10 @@ function renderStudy(r) {
     html += `<div class="small" style="margin:4px 0 0 8px">« ${esc(st.entry.title)} » — ${esc(st.entry.summary)} ${
       st.entry.source ? ` · <span class="muted">${esc(st.entry.source)}</span>` : ""
     }</div>`;
+  }
+  // Échec transitoire (moteur en repos…) : on permet de ré-étudier à la main.
+  if (st.retryable || st.status === "error") {
+    html += `<div style="margin:6px 0 0 8px"><button class="hint-btn" type="button" data-restudy="${esc(r.id)}">🧠 Ré-étudier maintenant</button></div>`;
   }
   return html;
 }

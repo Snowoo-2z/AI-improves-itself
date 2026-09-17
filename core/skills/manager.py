@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from core import store as store_module
 from core.ai.config import REPO_ROOT
+from core.research import service as research_service
 
 KNOWLEDGE_PATH = os.path.join(REPO_ROOT, "core", "data", "knowledge.json")
 
@@ -27,13 +28,15 @@ SKILLS: list[dict] = [
         "description": (
             "Interroge la base de connaissances du projet (jeux, IA, infra...). "
             "Retourne jusqu'à 3 entrées réellement pertinentes : les sujets explicites "
-            "de la requête doivent être présents, sinon retourne zéro résultat. "
+            "de la requête doivent être présents (la source/URL compte aussi : une URL "
+            "anthropic.com répond à « anthropic »), sinon la correspondance est signalée "
+            "partial=true — vérifie alors la pertinence avant de t'y appuyer. "
             "ATTENTION : si l'utilisateur demande le PLUS RÉCENT / DERNIER élément "
             "d'une catégorie, passe use_date=true pour un tri par date décroissante ; "
             "sans ça, la base renvoie dans l'ordre d'insertion (du plus ancien au plus récent). "
-            "Tu peux regrouper jusqu'à 3 recherches de lecture seule dans une même réponse "
-            "pour comparer des requêtes, mais ne boucle pas sur cette skill à chaque tour si "
-            "aucune entrée ne correspond : réponds honnêtement ou programme une recherche web."
+            "Si la base est vide et que l'info peut venir du web : liste d'abord les résultats "
+            "de recherche (list_research_results) AVANT de programmer une nouvelle tâche. "
+            "Ne boucle pas sur cette skill à chaque tour : réponds honnêtement ou programme une recherche web."
         ),
         "parameters": {
             "type": "object",
@@ -105,12 +108,22 @@ SKILLS: list[dict] = [
         "id": "list_research_results",
         "name": "Lire les derniers résultats de recherche",
         "description": (
-            "Retourne les N derniers résultats de recherche déjà exécutés par le notebook Colab. "
-            "Ne renvoie rien pour des tâches venant d'être créées (exécution asynchrone)."
+            "Lis les résultats de recherche déjà exécutés par le notebook Colab, en extrait "
+            "compact : cible de la tâche, date, statut de l'étude IA (study_status) et extrait "
+            "du contenu (study_status=skipped/error avec study_reason : l'étude échouait "
+            "transitoirement, elle est ré-essayée automatiquement — le contenu reste exploitable). "
+            "Passe query=« mots-clés du sujet » pour ne garder que les résultats pertinents. "
+            "pending_tasks liste les tâches EN ATTENTE : leurs résultats n'existent pas encore "
+            "(ne pas les annoncer). C'est LA skill à appeler quand l'utilisateur redemande une "
+            "info web que tu as cherchée avant et que search_knowledge ne trouve pas : les "
+            "résultats bruts ne sont JAMAIS perdus."
         ),
         "parameters": {
             "type": "object",
-            "properties": {"limit": {"type": "integer", "description": "Nombre de résultats (défaut 5, max 20)."}},
+            "properties": {
+                "limit": {"type": "integer", "description": "Nombre de résultats (défaut 5, max 20)."},
+                "query": {"type": "string", "description": "Mots-clés du sujet (ex: « dernier modèle anthropic ») pour filtrer les résultats pertinents."},
+            },
         },
     },
     {
@@ -223,39 +236,69 @@ def _h_search_knowledge(args: dict) -> dict:
     query = str(args.get("query", "")).strip()
     use_date = bool(args.get("use_date", False))
     entries = _load_knowledge()
+    partial = False
     if query:
         query_terms = _search_tokens(query)
         # Les termes de sujet (OpenAI, Mistral, Zelda, …) sont obligatoires
         # quand ils existent. Les termes génériques (« dernier modèle ») ne
         # doivent pas transformer n'importe quelle entrée de la base en réponse.
         required_terms = [t for t in query_terms if t not in _SEARCH_GENERIC_TERMS]
+        terms = required_terms or query_terms
         scored: list[tuple[int, int, int, dict]] = []
+        soft: list[tuple[int, int, int, dict]] = []
         for index, entry in enumerate(entries):
             title = str(entry.get("title", ""))
-            haystack = f"{title} {entry.get('summary', '')} {entry.get('category', '')}"
+            # La source compte dans la recherche : une URL (anthropic.com/news/…)
+            # porte le nom de l'éditeur même quand titre/résumé ne le disent pas.
+            haystack = (
+                f"{title} {entry.get('summary', '')} {entry.get('category', '')} "
+                f"{entry.get('source', '')}"
+            )
             tokens = set(_search_tokens(haystack))
-            terms = required_terms or query_terms
-            if not terms or not all(_term_matches(term, tokens) for term in terms):
-                continue
-            # Favoriser le titre et les entrées qui couvrent le plus de mots,
-            # tout en conservant l'ordre d'insertion pour les égalités.
-            title_tokens = set(_search_tokens(title))
-            title_hits = sum(_term_matches(term, title_tokens) for term in terms)
-            score = sum(_term_matches(term, tokens) for term in query_terms)
-            scored.append((title_hits, score, index, entry))
+            if not terms or all(_term_matches(term, tokens) for term in terms):
+                # Favoriser le titre et les entrées qui couvrent le plus de mots,
+                # tout en conservant l'ordre d'insertion pour les égalités.
+                title_tokens = set(_search_tokens(title))
+                title_hits = sum(_term_matches(term, title_tokens) for term in terms)
+                score = sum(_term_matches(term, tokens) for term in query_terms)
+                scored.append((title_hits, score, index, entry))
+            elif len(required_terms) >= 2:
+                # Correspondance PARTIELLE : la requête compte plusieurs termes de
+                # sujet et aucun n'est complet. On ne renvoie que les entrées qui
+                # en couvrent la moitié ou plus — jamais toute la base (l'ancien
+                # fallback poussait le LLM à s'appuyer sur du contenu non
+                # pertinent). Le drapeau `partial` dans la réponse oblige le LLM
+                # à vérifier la pertinence avant de s'appuyer dessus.
+                matched = sum(1 for term in required_terms if _term_matches(term, tokens))
+                if matched >= (len(required_terms) + 1) // 2:
+                    title_tokens = set(_search_tokens(title))
+                    title_hits = sum(1 for term in required_terms if _term_matches(term, title_tokens))
+                    soft.append((matched, title_hits, index, entry))
         if scored:
             scored.sort(key=lambda item: (item[0], item[1], -item[2]), reverse=True)
             entries = [item[3] for item in scored]
+        elif soft:
+            soft.sort(key=lambda item: (item[0], item[1], -item[2]), reverse=True)
+            entries = [item[3] for item in soft]
+            partial = True
         else:
             # Important : une recherche sans résultat reste sans résultat.
-            # L'ancien fallback renvoyait toute la base et le LLM croyait
-            # qu'une entrée partiellement similaire répondait à la question.
             entries = []
     # Sans use_date, l'ordre d'insertion est conservé (du plus ancien au plus
     # récent). Le tri explicite est réservé aux questions « dernier/récent ».
     if use_date:
         entries = sorted(entries, key=lambda e: str(e.get("date") or ""), reverse=True)
     top = entries[:3]
+    if partial:
+        note = (
+            "correspondance PARTIELLE : ces entrées ne couvrent pas tous les termes de la "
+            "requête — vérifie la pertinence avant de t'y appuyer, et complète éventuellement "
+            "avec list_research_results(query=...) si l'info vient du web."
+        )
+    elif use_date:
+        note = "tri date décroissante appliqué"
+    else:
+        note = "ordre d'insertion (plus ancien d'abord)"
     return {
         "entries": [
             {"title": e.get("title"), "category": e.get("category"), "date": e.get("date"), "summary": e.get("summary")}
@@ -263,7 +306,8 @@ def _h_search_knowledge(args: dict) -> dict:
         ],
         "count": len(entries),
         "used_date_sort": use_date,
-        "note": "tri date décroissante appliqué" if use_date else "ordre d'insertion (plus ancien d'abord)",
+        "partial": partial,
+        "note": note,
     }
 
 
@@ -322,19 +366,119 @@ def _h_add_research_task(args: dict) -> dict:
     }
 
 
+def _research_excerpt(data: Any, limit: int = 260) -> str:
+    """Extrait lisible (borné) du contenu brut d'un résultat de recherche.
+
+    Le dump JSON complet peut faire des dizaines de Ko (texte de pages lues) :
+    la skill ne donne à l'IA que ce qu'elle peut réellement exploiter.
+    """
+    if not isinstance(data, dict):
+        text = str(data or "")
+    elif isinstance(data.get("summary"), dict) and data["summary"].get("summary"):
+        text = str(data["summary"]["summary"])
+    elif data.get("text"):
+        text = str(data["text"])
+    elif data.get("content"):
+        text = str(data["content"])
+    else:
+        parts = []
+        for it in (data.get("results") or [])[:4]:
+            if not isinstance(it, dict):
+                continue
+            line = str(it.get("title", ""))
+            if it.get("snippet"):
+                line += f" — {it['snippet']}"
+            parts.append(line)
+        text = "\n".join(parts) or json.dumps(data, ensure_ascii=False)
+    text = " ".join(str(text).split())
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
 def _h_list_research_results(args: dict) -> dict:
+    """Les résultats de recherche sous forme d'extrait compact.
+
+    - `query` (mots-clés du sujet) : ne garde que les résultats pertinents
+      (cible de la tâche + contenu), au lieu du dump brut des N derniers.
+    - `pending_tasks` : les tâches encore en attente du notebook Colab — leurs
+      résultats n'existent PAS encore (ne pas dire à l'utilisateur qu'ils sont
+      disponibles).
+    - Filet anti-perte : la lecture déclenche la ré-étude automatique des
+      résultats dont l'étude avait échoué par transitoire (moteur en repos).
+    """
     s = store_module.get_store()
-    limit = int(args.get("limit", 5) or 5)
+    limit = max(1, min(int(args.get("limit", 5) or 5), 20))
+    query = str(args.get("query", "") or "").strip()
+
+    try:
+        research_service.retry_stale_studies()
+    except Exception:  # noqa: BLE001 — la ré-étude ne doit jamais casser la lecture
+        pass
+
+    tasks = {str(t.get("id")): t for t in s.list("research_tasks")}
     results = s.list("research_results")
     try:
         results = sorted(results, key=lambda r: str(r.get("created_at", "")), reverse=True)
     except Exception:
         pass
-    top = results[: min(limit, 20)]
+
+    query_terms: list[str] = []
+    if query:
+        query_terms = [t for t in _search_tokens(query) if t not in _SEARCH_GENERIC_TERMS] or _search_tokens(query)
+
+    digests: list[dict] = []
+    for r in results:
+        task = tasks.get(str(r.get("task_id"))) or {}
+        data = r.get("data") or {}
+        study = r.get("study") or {}
+        digest = {
+            "id": r.get("id"),
+            "kind": r.get("kind"),
+            "task_id": r.get("task_id"),
+            "target": task.get("target", ""),
+            "task_status": task.get("status", ""),
+            "created_at": r.get("created_at", ""),
+            "study_status": study.get("status", "in_progress"),
+            "study_reason": study.get("reason", ""),
+            "knowledge_title": (study.get("entry") or {}).get("title", ""),
+            "excerpt": _research_excerpt(data),
+        }
+        if query_terms:
+            hay = _norm(
+                f"{digest['target']} {digest['excerpt']} "
+                f"{json.dumps(data, ensure_ascii=False)[:2000]}"
+            )
+            if not any(_term_matches(t, set(_search_tokens(hay))) for t in query_terms):
+                continue
+        digests.append(digest)
+
+    top = digests[:limit]
+    pending = [
+        {"id": t.get("id"), "kind": t.get("kind"), "target": t.get("target"), "status": t.get("status")}
+        for t in sorted(
+            (t for t in tasks.values() if t.get("status") in ("pending", "processing")),
+            key=lambda t: str(t.get("created_at", "")),
+            reverse=True,
+        )[:5]
+    ]
+    if not top:
+        if query:
+            note = (
+                f"aucun résultat ne correspond à « {query} » — la tâche est peut-être encore en "
+                f"attente (voir pending_tasks) ou n'a pas encore été exécutée par le notebook Colab"
+            )
+        else:
+            note = "aucun résultat disponible"
+    else:
+        note = (
+            f"{len(top)} résultat(s) affiché(s) sur {len(results)} — les résultats bruts sont "
+            f"conservés : ceux dont l'étude a échoué (study_status=skipped/error) sont ré-étudiés "
+            f"automatiquement"
+        )
     return {
         "results": top,
         "count": len(results),
-        "note": "aucun résultat disponible" if not top else f"{len(top)} résultat(s) disponible(s)",
+        "pending_tasks": pending,
+        "note": note,
     }
 
 

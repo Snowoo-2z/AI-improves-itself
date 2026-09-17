@@ -238,6 +238,53 @@ finally:
 check("la synthèse finale est délivrée sur boucle mixte", sat_out["reply"] == "Synthèse finale après boucle mixte saturée.")
 check("la boucle mixte ne termine pas par l'erreur enchaîné trop d'outils", not sat_out["reply"].startswith("J'ai enchaîné trop"))
 
+print("[6] La source (URL) compte dans la recherche + correspondance partielle signalée")
+fixture_source = [
+    {
+        "title": "Claude Opus 4.5",
+        "category": "ia",
+        "date": "2026-09-10",
+        "summary": "Nouveau modèle de raisonnement, plus rapide.",
+        "source": "https://www.anthropic.com/news/claude-opus-4-5",
+    },
+    {
+        "title": "Mistral AI",
+        "category": "ia",
+        "date": "2023-09-01",
+        "summary": "Modèles Mistral Small et Medium.",
+        "source": "https://mistral.ai",
+    },
+]
+with mock.patch.object(skills_manager, "_load_knowledge", return_value=fixture_source):
+    by_source = skills_manager.execute("search_knowledge", {"query": "dernier modèle anthropic"})
+check(
+    "une entrée est trouvée via le domaine de sa source (anthropic.com)",
+    by_source["entries"][0]["title"] == "Claude Opus 4.5",
+    json.dumps(by_source),
+)
+check("pas de flag partial quand la correspondance est complète", by_source.get("partial") is False)
+check("l'entrée Mistral n'est pas confondue", all("Mistral" not in e["title"] for e in by_source["entries"]))
+
+fixture_partial = [
+    {"title": "Google Gemini 2", "category": "ia", "date": "2026-08-01",
+     "summary": "Nouveau modèle de Google.", "source": "https://blog.google"},
+    {"title": "Vision API", "category": "web", "date": "2026-07-01",
+     "summary": "API d'analyse d'images.", "source": "https://example.com"},
+]
+with mock.patch.object(skills_manager, "_load_knowledge", return_value=fixture_partial):
+    partial = skills_manager.execute("search_knowledge", {"query": "modèle vision google"})
+check(
+    "correspondance partielle renvoyée avec le flag partial",
+    partial.get("partial") is True and len(partial["entries"]) >= 1,
+    json.dumps(partial),
+)
+check("l'entrée la plus couverte arrive d'abord", partial["entries"][0]["title"] == "Google Gemini 2")
+check("la note avertit que la correspondance est partielle", "PARTIELLE" in partial.get("note", ""))
+
+with mock.patch.object(skills_manager, "_load_knowledge", return_value=[fixture_partial[1]]):
+    still_empty = skills_manager.execute("search_knowledge", {"query": "modèle OpenAI"})
+check("un seul terme absent → toujours vide (garde-fou historique inchangé)", still_empty["entries"] == [])
+
 print(f"RÉSULTAT : {len(PASSED)} OK, {len(FAILED)} en échec")
 if FAILED:
     for item in FAILED:

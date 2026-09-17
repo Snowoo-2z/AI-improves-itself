@@ -877,15 +877,33 @@ def _tool_call(name: str, arguments: dict) -> dict:
     }
 
 
+def _demo_think_lines(system: str) -> str:
+    """Lignes du bloc <think> de la démo, calibrées sur l'effort demandé.
+
+    Le niveau d'effort est reconnu dans le prompt système via la ligne
+    « Effort de réflexion : … » ajoutée par `core.ai.chat._thinking_directive`.
+    """
+    if "**FAIBLE**" in system:
+        return "1. Vérification rapide de la demande et de la réponse envisagée.\n"
+    if "**ÉLEVÉ**" in system:
+        return (
+            "1. Analyse détaillée de la demande et décomposition en sous-problèmes.\n"
+            "2. Hypothèses explicites et points d'incertitude identifiés.\n"
+            "3. Évaluation de plusieurs stratégies : avantages et limites de chacune.\n"
+            "4. Choix de la stratégie retenue et justification.\n"
+            "5. Vérification des faits, de la cohérence logique et des cas limites.\n"
+            "6. Structuration et validation finale de la réponse.\n"
+        )
+    return (
+        "1. Analyse de la demande de l'utilisateur et du contexte.\n"
+        "2. Évaluation des connaissances locales et des règles de prompt actives.\n"
+        "3. Structuration et validation de la réponse.\n"
+    )
+
+
 def _wrap_demo_thinking(system: str, content: str) -> str:
     if "MODE PENSÉE / THINKING (ACTIVÉ)" in system and content and not content.startswith("<think>"):
-        think_text = (
-            "<think>\n"
-            "1. Analyse de la demande de l'utilisateur et du contexte.\n"
-            "2. Évaluation des connaissances locales et des règles de prompt actives.\n"
-            "3. Structuration et validation de la réponse.\n"
-            "</think>\n"
-        )
+        think_text = "<think>\n" + _demo_think_lines(system) + "</think>\n"
         return think_text + content
     return content
 

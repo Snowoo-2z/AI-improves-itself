@@ -119,7 +119,13 @@ def _validate_images(messages: list) -> None:
 
 class ChatRequest(BaseModel):
     messages: list[dict] = Field(..., description="Historique complet [{role, content}]")
-    thinking: bool = Field(default=False, description="Activer le mode pensée / raisonnement explicite")
+    thinking: bool | str = Field(
+        default=False,
+        description=(
+            "Mode Pensée : effort de réflexion choisi en bas de la barre de chat — "
+            "'low' | 'medium' | 'high' | 'off'. Compat historique : true (⇒ medium) / false (⇒ off)."
+        ),
+    )
 
 
 class PromptEditRequest(BaseModel):
@@ -384,6 +390,33 @@ def research_result_add(req: ResearchResult) -> dict:
     """Point d'entrée utilisé par le notebook Colab."""
     item = research.add_result(req.kind, req.data, task_id=req.task_id)
     return {"ok": True, "id": item.get("id")}
+
+
+class StudyRequest(BaseModel):
+    force: bool = False
+
+
+@app.post("/api/research/results/{result_id}/study")
+def research_result_study(result_id: str, req: StudyRequest | None = None) -> dict:
+    """Relance l'étude IA d'un résultat (structuration + vérification).
+
+    Bouton « Ré-étudier » de la page /colab : utile quand l'étude automatique a
+    échoué par transitoire (moteur en repos au moment du push Colab). Sans
+    `force`, on ne relance que ce qui a un sens : résultat jamais étudié, ou
+    étude skipped/error. `force=true` contourne (coûte 2 appels LLM).
+    """
+    s = store_module.get_store()
+    item = next((r for r in s.list("research_results") if str(r.get("id")) == str(result_id)), None)
+    if item is None:
+        raise HTTPException(404, "résultat introuvable")
+    study = item.get("study") or {}
+    force = bool(req and req.force)
+    if not force and study.get("status") not in (None, "skipped", "error"):
+        raise HTTPException(
+            409, f"aucune raison de ré-étudier (statut actuel : {study.get('status')}) — force=true pour forcer"
+        )
+    research._spawn_study(item, force=force)
+    return {"ok": True, "id": result_id, "status": "étude relancée en arrière-plan"}
 
 
 @app.get("/api/data/entries")

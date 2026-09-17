@@ -20,10 +20,16 @@ const LS_CONVOS = "aiis.convos.v1";
 const LS_ACTIVE = "aiis.activeConvo.v1";
 const LS_THINKING = "aiis.thinking.v1";
 
-let convos = [];      // [{id, title, createdAt, updatedAt, messages:[{role, content, thinking?, events?, warn?}]}]
+let convos = [];      // [{id, title, createdAt, updatedAt, messages:[{role, content, thinking?, thinkingEffort?, thinkingMs?, events?, warn?}]}]
 let currentId = null; // null = nouveau chat (non persisté tant que vide)
 let isSending = false;
-let isThinking = false;
+
+/* Mode Pensée : effort de réflexion choisi en bas de la barre de chat (façon Claude).
+   "off" = réponse directe sans bloc de réflexion ; sinon l'IA raisonne dans un
+   bloc <think> proportionnel à l'effort. Persisté (mêmes niveaux que le back). */
+const THINKING_EFFORTS = ["off", "low", "medium", "high"];
+const THINKING_LABELS = { off: "Thinking", low: "Faible", medium: "Moyen", high: "Élevé" };
+let thinkingEffort = "off";
 
 // Vision : images en attente pour ce message (remis à zéro à chaque envoi,
 // changement de conversation ou nouveau chat). Chaque entrée = data-URL
@@ -74,9 +80,12 @@ function load() {
   currentId = localStorage.getItem(LS_ACTIVE) || null;
   if (currentId && !current()) currentId = null;
   try {
-    isThinking = localStorage.getItem(LS_THINKING) === "true";
+    const raw = localStorage.getItem(LS_THINKING);
+    if (raw === "true") thinkingEffort = "medium"; // migration de l'ancien réglage booléen
+    else if (raw && THINKING_EFFORTS.includes(raw)) thinkingEffort = raw;
+    else thinkingEffort = "off";
   } catch {
-    isThinking = false;
+    thinkingEffort = "off";
   }
 }
 function save() {
@@ -93,23 +102,70 @@ function touch(convo) {
 // Icônes SVG : renvoie vers le sprite <symbol> défini dans index.html.
 const icon = (name) => `<svg class="ic" aria-hidden="true"><use href="#i-${name}" /></svg>`;
 
+const thinkingMenu = document.getElementById("thinking-menu");
+
 function updateThinkingUI() {
   if (!thinkingBtn) return;
-  thinkingBtn.classList.toggle("active", isThinking);
-  thinkingBtn.setAttribute("aria-pressed", isThinking ? "true" : "false");
-  thinkingBtn.title = isThinking
-    ? "Mode Pensée : ACTIVÉ (cliquer pour désactiver)"
-    : "Mode Pensée : DÉSACTIVÉ (cliquer pour activer)";
+  const active = thinkingEffort !== "off";
+  thinkingBtn.classList.toggle("active", active);
+  thinkingBtn.setAttribute("aria-pressed", active ? "true" : "false");
+  thinkingBtn.title = active
+    ? `Mode Pensée : EFFORT ${THINKING_LABELS[thinkingEffort].toUpperCase()} (cliquer pour changer)`
+    : "Mode Pensée : DÉSACTIVÉ (cliquer pour choisir l'effort)";
+  const label = thinkingBtn.querySelector(".thinking-label");
+  if (label) label.textContent = THINKING_LABELS[thinkingEffort];
+  document.querySelectorAll(".thinking-opt").forEach((o) => {
+    const on = o.dataset.effort === thinkingEffort;
+    o.classList.toggle("selected", on);
+    o.setAttribute("aria-checked", on ? "true" : "false");
+  });
+}
+
+let thinkingMenuOpen = false;
+function openThinkingMenu() {
+  if (!thinkingMenu) return;
+  thinkingMenu.hidden = false;
+  thinkingMenuOpen = true;
+  thinkingBtn.setAttribute("aria-expanded", "true");
+}
+function closeThinkingMenu() {
+  if (!thinkingMenu) return;
+  thinkingMenu.hidden = true;
+  thinkingMenuOpen = false;
+  thinkingBtn.setAttribute("aria-expanded", "false");
+}
+function setThinkingEffort(effort) {
+  if (!THINKING_EFFORTS.includes(effort)) return;
+  thinkingEffort = effort;
+  try {
+    localStorage.setItem(LS_THINKING, effort);
+  } catch {}
+  closeThinkingMenu();
+  updateThinkingUI();
 }
 
 if (thinkingBtn) {
-  thinkingBtn.addEventListener("click", () => {
-    isThinking = !isThinking;
-    try {
-      localStorage.setItem(LS_THINKING, isThinking ? "true" : "false");
-    } catch {}
-    updateThinkingUI();
+  thinkingBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (thinkingMenuOpen) closeThinkingMenu();
+    else openThinkingMenu();
   });
+  if (thinkingMenu) {
+    thinkingMenu.addEventListener("click", (e) => {
+      const opt = e.target.closest(".thinking-opt");
+      if (opt) setThinkingEffort(opt.dataset.effort);
+    });
+    // Clic ailleurs ou Échap : referme le menu.
+    document.addEventListener("click", (e) => {
+      if (thinkingMenuOpen && !e.target.closest(".thinking-picker")) closeThinkingMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && thinkingMenuOpen) {
+        closeThinkingMenu();
+        thinkingBtn.focus();
+      }
+    });
+  }
 }
 
 /* ---------- Rendu : messages ---------- */
@@ -133,18 +189,25 @@ function traceCard({ cls, summaryHtml, bodyHtml, open }) {
   return d;
 }
 
-function estimateThinkingTime(thinkingText) {
+function thinkingTimeLabel(thinkingText, ms) {
   if (!thinkingText) return "";
+  const fmt = (sec) => String(sec < 10 ? Math.round(sec * 10) / 10 : Math.round(sec)).replace(".", ",") + " s";
+  // Durée mesurée (stream progressif) si disponible, sinon estimation à ~4 mots/s
+  // (cas du mode démo : le bloc arrive en un seul jeton → pas de mesure possible).
+  if (ms && ms >= 400) return fmt(ms / 1000);
   const words = thinkingText.trim().split(/\s+/).length;
-  return `${words} mot${words > 1 ? "s" : ""}`;
+  return fmt(Math.max(0.2, words / 4));
 }
 
-function thinkingCard(thinkingText, { open = false } = {}) {
+function thinkingCard(thinkingText, { open = false, effort = null, ms = 0 } = {}) {
   const d = document.createElement("details");
   d.className = "thinking-box";
   if (open) d.open = true;
+  const effortBadge = effort && effort !== "off"
+    ? `<span class="thinking-effort">effort ${THINKING_LABELS[effort] || effort}</span>`
+    : "";
   const s = document.createElement("summary");
-  s.innerHTML = `${icon("brain")}<span>Pensée</span><span class="thinking-time">(${estimateThinkingTime(thinkingText)})</span>`;
+  s.innerHTML = `${icon("brain")}<span>Think</span>${effortBadge}<span class="thinking-time">(${thinkingTimeLabel(thinkingText, ms)})</span>`;
   const content = document.createElement("div");
   content.className = "thinking-content";
   content.textContent = thinkingText;
@@ -257,7 +320,7 @@ function aiMsgEl(msg, { canRegen } = {}) {
   body.className = "abody";
 
   if (msg.thinking) {
-    body.appendChild(thinkingCard(msg.thinking, { open: false }));
+    body.appendChild(thinkingCard(msg.thinking, { open: false, effort: msg.thinkingEffort, ms: msg.thinkingMs || 0 }));
   }
 
   const content = document.createElement("div");
@@ -502,6 +565,8 @@ function createAssistant() {
   wrap.className = "cmsg ai";
   wrap.innerHTML = `<div class="avatar">${icon("atom")}</div><div class="abody"><div class="live-thinking-slot"></div><div class="bubble md ghost live-bubble"></div><div class="actions"><button type="button" class="act-btn live-copy">${icon("copy")}<span>Copier</span></button></div></div>`;
   let rawText = "";
+  let thinkingStart = 0; // horodatage du 1er jeton du bloc de réflexion
+  let thinkingMs = 0;    // durée mesurée du raisonnement (0 = pas mesurable, ex. démo)
   const liveThinkingSlot = wrap.querySelector(".live-thinking-slot");
   const bubble = wrap.querySelector(".bubble");
   const copyBtn = wrap.querySelector(".live-copy");
@@ -523,13 +588,17 @@ function createAssistant() {
       rawText += delta;
       const parsed = parseRawThinking(rawText);
       if (parsed.thinking) {
+        if (!thinkingStart) thinkingStart = performance.now();
         let box = liveThinkingSlot.querySelector(".thinking-box");
         if (!box) {
           box = document.createElement("details");
           box.className = "thinking-box";
           box.open = true;
+          const effortBadge = thinkingEffort !== "off"
+            ? `<span class="thinking-effort">effort ${THINKING_LABELS[thinkingEffort]}</span>`
+            : "";
           box.innerHTML = `
-            <summary>${icon("brain")}<span class="think-title">Réflexion en cours…</span><span class="thinking-live-badge"></span></summary>
+            <summary>${icon("brain")}<span class="think-title">Think…</span>${effortBadge}<span class="thinking-live-badge"></span></summary>
             <div class="thinking-content"></div>
           `;
           liveThinkingSlot.appendChild(box);
@@ -539,14 +608,16 @@ function createAssistant() {
         const titleEl = box.querySelector(".think-title");
         const badgeEl = box.querySelector(".thinking-live-badge");
         if (!parsed.isThinkingLive) {
-          if (titleEl) titleEl.textContent = "Pensée";
+          if (titleEl) titleEl.textContent = "Think";
           if (badgeEl) badgeEl.remove();
+          if (!thinkingMs) thinkingMs = Math.round(performance.now() - thinkingStart);
         }
       }
       bubble.innerHTML = md(parsed.reply);
       scrollBottom();
     },
     get text() { return parseRawThinking(rawText).reply; },
+    get thinkingMs() { return thinkingMs; },
     remove() { wrap.remove(); },
   };
 }
@@ -631,7 +702,7 @@ async function requestReply(convo) {
   try {
     await consumeStream(
       API + "/api/chat/stream",
-      { messages: apiMessages(convo), thinking: isThinking },
+      { messages: apiMessages(convo), thinking: thinkingEffort },
       {
         onToken: (ev) => {
           if (typing.parentNode) typing.remove();
@@ -655,7 +726,7 @@ async function requestReply(convo) {
   }
 }
 
-function finishReply(convo, done) {
+function finishReply(convo, done, ai) {
   const typing = chatLog.querySelector(".cmsg .dots");
   if (typing) typing.closest(".cmsg").remove();
   if (!done) {
@@ -682,6 +753,10 @@ function finishReply(convo, done) {
     role: "assistant",
     content: done.reply,
     thinking: done.thinking || (parseRawThinking(done.reply || "").thinking || null),
+    thinkingEffort: done.thinking_effort || (thinkingEffort !== "off" ? thinkingEffort : null),
+    // Durée réelle du raisonnement (ms) si le flux était progressif ; sinon null
+    // → la carte estime à partir du nombre de mots (~4 mots/s).
+    thinkingMs: ai && ai.thinkingMs >= 400 ? ai.thinkingMs : null,
     events: done.events || [],
     warn,
   };

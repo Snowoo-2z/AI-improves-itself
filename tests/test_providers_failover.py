@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -263,7 +264,11 @@ failure5 = P.HEALTH.snapshot()["gemini"]["failure"]
 wait5 = P.HEALTH.ready_in("gemini")
 check("classé quota journalier", failure5["kind"] == "daily_quota", f"→ {failure5['kind']}")
 check("repos ≤ 24 h", 0 < wait5 <= 86_400, f"→ {wait5:.0f}s")
-check("délai humain en heures", "h" in P.human_delay(wait5), P.human_delay(wait5))
+# Le délai jusqu'au minuit de Pacifique dépend de l'heure d'exécution : selon
+# l'heure il s'affiche en minutes OU en heures — on vérifie le format lisible,
+# pas une unité précise (test instable sinon).
+hd5 = P.human_delay(wait5)
+check("délai humain lisible (min ou h selon l'heure)", bool(re.fullmatch(r"~\d+ (s|min|h\d{2}?)", hd5)), hd5)
 utc_wait = P.daily_reset_seconds("utc")
 pacific_wait = P.daily_reset_seconds("us_pacific")
 check("la fenêtre Pacifique diffère de l'UTC", abs(utc_wait - pacific_wait) > 3600,

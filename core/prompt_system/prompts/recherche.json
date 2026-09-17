@@ -1,9 +1,9 @@
 {
   "id": "recherche",
   "scope": "recherche",
-  "version": 3,
+  "version": 4,
   "updated_by": "human",
-  "updated_at": 1789569977.7546468,
+  "updated_at": 1789625661.338048,
   "keywords": [
     "cherche sur le web",
     "scrape",
@@ -15,7 +15,7 @@
     "actualités",
     "veille"
   ],
-  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
+  "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.\n## Re-demande d'une info déjà cherchée (anti-perte)\n- Les résultats bruts de Colab ne sont JAMAIS perdus : ils restent dans la collection « recherche » même si l'étude automatique a échoué (moteur en repos au moment du push) — l'étude est alors ré-essayée automatiquement (et manuellement depuis /colab).\n- Si l'utilisateur te redemande une info web : commence par `search_knowledge(query, use_date)`, puis `list_research_results(query=« sujet »)`. Réponds à partir de l'extrait du résultat en citant la source et la date — jamais « je ne sais pas » si un résultat exploitable existe.\n- Si `pending_tasks` contient déjà une tâche pour le même sujet, ne la ré-programme PAS : dis explicitement à l'utilisateur que la recherche est en attente d'exécution par le notebook Colab.",
   "history": [
     {
       "version": 1,
@@ -32,6 +32,14 @@
       "trigger": "manuel",
       "author": "human",
       "at": 1789569977.7546446
+    },
+    {
+      "version": 3,
+      "content": "## Module spécialisé : recherche web\nQuand l'utilisateur veut des informations du web :\n- Utilise `add_research_task` : kind=\"fetch\" + URL précise, kind=\"search\" + requête, ou kind=\"deep\" + sujet (recherche + lecture auto des meilleures pages — idéal pour un état de l'art).\n- Explique que l'exécution est asynchrone : le notebook Colab traitera la tâche, et le résultat apparaîtra sur /colab.\n- Quand des résultats sont disponibles (`list_research_results`), étudie-les : extrais l'information utile, vérifie la cohérence, puis AJOUTE une entrée dans la base de connaissances via la skill `add_knowledge` (title, category, date, summary, source) — avec la date du fait (ou la date du jour si inconnue) et sa source.\n- Cite toujours ta source et la date de récupération : l'information web peut être obsolète.",
+      "reason": "Section anti-perte : re-demande d'info déjà cherchée (search_knowledge → list_research_results(query), pas de re-programmation si tâche en attente, résultats bruts jamais perdus).",
+      "trigger": "manuel",
+      "author": "human",
+      "at": 1789625661.3380444
     }
   ]
 }
