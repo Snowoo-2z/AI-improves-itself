@@ -35,6 +35,8 @@
         <a href="/docs/GITHUB-BACKEND.md">la doc backend</a>).
         Un second notebook, l'<b>analyseur de discussions</b> (<code>analyze_discussions.ipynb</code>),
         vérifie automatiquement les informations de vos conversations web et met à jour la base.
+        Un troisième, la <b>recherche agentique</b> (<code>agent_search.ipynb</code> / 1 cellule) :
+        l'IA dit ce qu'elle fait, le script HTTP cherche (pas de navigateur JS), les hits reviennent, elle décide la suite.
       </p>
     </section>
 
@@ -53,6 +55,20 @@
         <div class="card">
           <h2>Derniers résultats</h2>
           <div id="results-wrap"><span class="muted">Chargement…</span></div>
+        </div>
+        <div class="card">
+          <h2>Code — recherche agentique (1 cellule)</h2>
+          <p class="small muted" style="margin:0 0 12px">
+            <code>colab/agent_search.py</code> — collez tel quel dans une cellule Colab.
+            HTTP only (pas de navigateur JS) : le script dit ce qu'il fait, cherche, affiche les hits, enchaîne fetch/search.
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn" id="btn-copy-agent" type="button">Copier le code (1 cellule)</button>
+            <button class="btn ghost" id="btn-toggle-agent" type="button">Afficher le code</button>
+          </div>
+          <div id="code-viewer-agent" style="display:none">
+            <pre id="code-block-agent" class="block" style="max-height:520px;overflow:auto;font-size:12px;line-height:1.45;tab-size:4;white-space:pre;word-break:normal;overflow-wrap:normal"></pre>
+          </div>
         </div>
         <div class="card">
           <h2>Code — analyseur de discussions</h2>

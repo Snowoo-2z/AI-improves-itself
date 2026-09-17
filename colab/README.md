@@ -3,12 +3,24 @@
 > C'est la pièce du README : *« l'IA met par exemple "j'ai besoin de vérifier
 > tatata" et le script pour Colab se met à jour avec des tasks »*.
 
-Deux scripts, deux rôles :
+Trois scripts :
 
 | Script | Rôle | Clé API |
 |---|---|---|
 | `main.ipynb` → `main.py` (v2) | exécute les **tâches de recherche** programmées par l'IA, pousse les résultats au site | optionnelle (résumé local) |
+| `agent_search.ipynb` / `agent_search.py` | **Recherche agentique (1 cellule)** : dit ce qu'il fait, HTTP search/fetch (pas de navigateur JS), hits, étape suivante | optionnelle (Mistral pour enchaîner) |
 | `analyze_discussions.ipynb` / `analyze_discussions.py` | **Analyseur automatique de discussions** : vérifie les infos de TES discussions web et met à jour la base de connaissances | **requise — Mistral only** (fournie par l'utilisateur) |
+
+## Recherche agentique (1 cellule)
+
+Colab n'a **pas** de vrai navigateur. `agent_search.py` (copier depuis `/colab` → bouton **Copier le code (1 cellule)**) :
+
+1. tu colles la question (« dernier modèle Anthropic ») ;
+2. le script **dit** l'étape (« je cherche … ») puis exécute HTTP (DDG / Wikipédia / fetch) ;
+3. les hits s'affichent ; avec une clé Mistral optionnelle, le modèle choisit fetch/search/stop (max 4 étapes) ;
+4. push `POST /api/research/results` — visible sur `/colab` et via `list_research_results`.
+
+Sans clé : une seule recherche + push. Pages 100 % JS → texte vide (normal).
 
 ## Analyseur automatique de discussions (1 cellule)
 

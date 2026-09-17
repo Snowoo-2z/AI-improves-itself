@@ -126,57 +126,50 @@ form.addEventListener("submit", async (e) => {
 Promise.all([renderTasks(), renderResults()]).catch((e) => toast(e.message, true));
 renderStatusChip();
 
-/* ── Code viewer — analyseur de discussions (lazy-load + copy) ──────────── */
-{
-  const toggleBtn = document.getElementById("btn-toggle-code");
-  const copyBtn = document.getElementById("btn-copy-code");
-  const viewer = document.getElementById("code-viewer");
-  const codeBlock = document.getElementById("code-block");
-  let rawCode = null; // cached source text
+/* ── Code viewer — lazy-load + copy (analyseur + agent) ──────────── */
+function bindCodeViewer({ toggleId, copyId, viewerId, blockId, url, copyReadyLabel }) {
+  const toggleBtn = document.getElementById(toggleId);
+  const copyBtn = document.getElementById(copyId);
+  const viewer = document.getElementById(viewerId);
+  const codeBlock = document.getElementById(blockId);
+  if (!toggleBtn && !copyBtn) return;
+  let rawCode = null;
 
   async function loadCode() {
     if (rawCode !== null) return true;
-    toggleBtn.textContent = "Chargement…";
-    toggleBtn.disabled = true;
+    if (toggleBtn) {
+      toggleBtn.dataset.prev = toggleBtn.textContent;
+      toggleBtn.textContent = "Chargement…";
+      toggleBtn.disabled = true;
+    }
+    if (copyBtn) copyBtn.disabled = true;
     try {
-      const res = await fetch("/colab-notebook/analyze_discussions.py");
+      const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       rawCode = await res.text();
-      codeBlock.textContent = rawCode;
-      copyBtn.disabled = false;
+      if (codeBlock) codeBlock.textContent = rawCode;
+      if (copyBtn) copyBtn.disabled = false;
       return true;
     } catch (err) {
       toast("Impossible de charger le code : " + err.message, true);
       return false;
     } finally {
-      toggleBtn.disabled = false;
+      if (toggleBtn) {
+        toggleBtn.disabled = false;
+        if (viewer && viewer.style.display === "none") toggleBtn.textContent = toggleBtn.dataset.prev || "Afficher le code";
+      }
     }
   }
 
-  toggleBtn.addEventListener("click", async () => {
-    const visible = viewer.style.display !== "none";
-    if (visible) {
-      viewer.style.display = "none";
-      toggleBtn.textContent = "Afficher le code";
-      return;
-    }
+  async function copyCode() {
     if (rawCode === null) {
       const ok = await loadCode();
-      if (!ok) { toggleBtn.textContent = "Afficher le code"; return; }
+      if (!ok) return;
     }
-    viewer.style.display = "block";
-    toggleBtn.textContent = "Masquer le code";
-  });
-
-  copyBtn.addEventListener("click", async () => {
-    if (!rawCode) return;
+    const label = copyReadyLabel || "Copier le code";
     try {
       await navigator.clipboard.writeText(rawCode);
-      const prev = copyBtn.textContent;
-      copyBtn.textContent = "✅ Copié !";
-      setTimeout(() => { copyBtn.textContent = prev; }, 2000);
     } catch {
-      /* fallback : select-all via textarea */
       const ta = document.createElement("textarea");
       ta.value = rawCode;
       ta.style.cssText = "position:fixed;opacity:0";
@@ -184,9 +177,46 @@ renderStatusChip();
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
+    }
+    if (copyBtn) {
       const prev = copyBtn.textContent;
       copyBtn.textContent = "✅ Copié !";
-      setTimeout(() => { copyBtn.textContent = prev; }, 2000);
+      setTimeout(() => { copyBtn.textContent = prev || label; }, 2000);
     }
-  });
+    toast("Code copié — colle-le dans une cellule Colab");
+  }
+
+  if (toggleBtn && viewer) {
+    toggleBtn.addEventListener("click", async () => {
+      const visible = viewer.style.display !== "none";
+      if (visible) {
+        viewer.style.display = "none";
+        toggleBtn.textContent = "Afficher le code";
+        return;
+      }
+      if (rawCode === null) {
+        const ok = await loadCode();
+        if (!ok) { toggleBtn.textContent = "Afficher le code"; return; }
+      }
+      viewer.style.display = "block";
+      toggleBtn.textContent = "Masquer le code";
+    });
+  }
+  if (copyBtn) copyBtn.addEventListener("click", copyCode);
 }
+
+bindCodeViewer({
+  toggleId: "btn-toggle-code",
+  copyId: "btn-copy-code",
+  viewerId: "code-viewer",
+  blockId: "code-block",
+  url: "/colab-notebook/analyze_discussions.py",
+});
+bindCodeViewer({
+  toggleId: "btn-toggle-agent",
+  copyId: "btn-copy-agent",
+  viewerId: "code-viewer-agent",
+  blockId: "code-block-agent",
+  url: "/colab-notebook/agent_search.py",
+  copyReadyLabel: "Copier le code (1 cellule)",
+});

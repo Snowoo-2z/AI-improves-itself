@@ -32,8 +32,12 @@ SKILLS: list[dict] = [
             "anthropic.com répond à « anthropic »), sinon la correspondance est signalée "
             "partial=true — vérifie alors la pertinence avant de t'y appuyer. "
             "ATTENTION : si l'utilisateur demande le PLUS RÉCENT / DERNIER élément "
-            "d'une catégorie, passe use_date=true pour un tri par date décroissante ; "
-            "sans ça, la base renvoie dans l'ordre d'insertion (du plus ancien au plus récent). "
+            "d'une catégorie, passe use_date=true pour un tri par date ISO décroissante "
+            "(la date de l'entrée = date du FAIT, pas la date d'insertion). "
+            "Le premier résultat est alors le plus récent ; un modèle plus ancien "
+            "(ex. Mythos 5, 2026-06-23) ne doit PAS être présenté comme le dernier "
+            "s'il existe une entrée plus récente (ex. Claude Fable 5.1, 2026-09-10). "
+            "Sans use_date, la base renvoie dans l'ordre d'insertion. "
             "Si la base est vide et que l'info peut venir du web : liste d'abord les résultats "
             "de recherche (list_research_results) AVANT de programmer une nouvelle tâche. "
             "Ne boucle pas sur cette skill à chaque tour : réponds honnêtement ou programme une recherche web."
@@ -42,7 +46,21 @@ SKILLS: list[dict] = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Mots-clés de la recherche."},
-                "use_date": {"type": "boolean", "description": "true = tri par date décroissante (plus récent d'abord)."},
+                "use_date": {
+                    "type": "boolean",
+                    "description": (
+                        "true = tri par date du FAIT (ISO) décroissante. "
+                        "Activé tout seul si la requête parle de dernier/récent/modèle/jeu/sortie."
+                    ),
+                },
+                "date": {
+                    "type": "string",
+                    "description": (
+                        "Date ISO AAAA-MM-JJ ou année AAAA : ne garder que les faits "
+                        "à cette date (jour) ou jusqu'à cette année (as-of). "
+                        "Utile pour « dernier modèle en 2026 »."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -80,6 +98,32 @@ SKILLS: list[dict] = [
                 "type": {"type": "string", "enum": ["feature", "ui", "bug", "skill", "other"]},
             },
             "required": ["title", "description"],
+        },
+    },
+    {
+        "id": "web_agent",
+        "name": "Agent de recherche web (immédiat, sans navigateur)",
+        "description": (
+            "Pilote UNE étape de recherche HTTP tout de suite dans ce tour "
+            "(pas de navigateur JS — Colab non plus). kind=search (requête) | "
+            "fetch (URL) | deep (recherche + lecture des 2 meilleures pages). "
+            "Passe `say` : une phrase pour l'utilisateur (« je cherche le dernier "
+            "modèle Anthropic »). Les hits reviennent avec titre, url, date si "
+            "présente, extrait. Ensuite : fetch l'URL utile, ou add_knowledge "
+            "avec la DATE DU FAIT, ou add_research_task si la page est 100 % JS. "
+            "N'enchaîne pas plus de 3 étapes web_agent par message."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["search", "fetch", "deep"]},
+                "target": {"type": "string", "description": "Requête (search/deep) ou URL (fetch)."},
+                "say": {
+                    "type": "string",
+                    "description": "Ce que tu fais, en une phrase, visible dans le chat.",
+                },
+            },
+            "required": ["kind", "target"],
         },
     },
     {
@@ -234,7 +278,9 @@ def _load_knowledge() -> list[dict]:
 
 def _h_search_knowledge(args: dict) -> dict:
     query = str(args.get("query", "")).strip()
-    use_date = bool(args.get("use_date", False))
+    as_of = str(args.get("date", "") or "").strip()
+    temporal = _looks_temporal(query) or bool(as_of)
+    use_date = bool(args.get("use_date", False)) or temporal
     entries = _load_knowledge()
     partial = False
     if query:
@@ -284,11 +330,21 @@ def _h_search_knowledge(args: dict) -> dict:
         else:
             # Important : une recherche sans résultat reste sans résultat.
             entries = []
-    # Sans use_date, l'ordre d'insertion est conservé (du plus ancien au plus
-    # récent). Le tri explicite est réservé aux questions « dernier/récent ».
+    if as_of:
+        entries = _filter_by_as_of(entries, as_of)
     if use_date:
-        entries = sorted(entries, key=lambda e: str(e.get("date") or ""), reverse=True)
+        entries = sorted(
+            entries,
+            key=lambda e: _entry_date(e) or "0000-00-00",
+            reverse=True,
+        )
     top = entries[:3]
+    timeline = [
+        {"date": _entry_date(e), "title": e.get("title")}
+        for e in entries
+        if _entry_date(e)
+    ][:12]
+    undated = sum(1 for e in entries if not _entry_date(e))
     if partial:
         note = (
             "correspondance PARTIELLE : ces entrées ne couvrent pas tous les termes de la "
@@ -296,16 +352,33 @@ def _h_search_knowledge(args: dict) -> dict:
             "avec list_research_results(query=...) si l'info vient du web."
         )
     elif use_date:
-        note = "tri date décroissante appliqué"
+        note = (
+            "tri par date de FAIT (ISO, plus récent d'abord) — cite la date de chaque "
+            "entrée ; le premier daté est le plus récent. Les faits sans date ISO ne "
+            "comptent pas comme « dernier »."
+        )
+        if as_of:
+            note += f" Filtre date/année : {as_of}."
+        if undated:
+            note += f" {undated} entrée(s) sans date exacte, ignorées dans la chronologie."
     else:
         note = "ordre d'insertion (plus ancien d'abord)"
     return {
         "entries": [
-            {"title": e.get("title"), "category": e.get("category"), "date": e.get("date"), "summary": e.get("summary")}
+            {
+                "title": e.get("title"),
+                "category": e.get("category"),
+                "date": _entry_date(e) or e.get("date") or None,
+                "dated": bool(_entry_date(e)),
+                "summary": e.get("summary"),
+                "source": e.get("source"),
+            }
             for e in top
         ],
+        "timeline": timeline,
         "count": len(entries),
         "used_date_sort": use_date,
+        "as_of": as_of or None,
         "partial": partial,
         "note": note,
     }
@@ -336,6 +409,52 @@ def _h_request_to_dev(args: dict) -> dict:
         },
     )
     return {"ok": True, "id": item.get("id"), "status": "open"}
+
+
+def _h_web_agent(args: dict) -> dict:
+    """Une étape agent : dire → exécuter HTTP → renvoyer les hits."""
+    from core.research import agent as research_agent
+    from core.research import service as research_service
+
+    kind = str(args.get("kind", "search") or "search")
+    target = str(args.get("target", "") or "").strip()
+    say = str(args.get("say", "") or "").strip()[:240]
+    if not target:
+        return {"ok": False, "error": "target est requis."}
+    if not research_agent.network_allowed():
+        return {
+            "ok": False,
+            "error": "agent hors-ligne (AIIS_AGENT_OFFLINE=1) — utilise add_research_task.",
+            "say": say,
+        }
+    step = research_agent.run_step(kind, target)
+    if not step.get("ok"):
+        step["say"] = say
+        return step
+    # Persiste comme un résultat de recherche (visible /colab + list_research_results).
+    try:
+        item = research_service.add_result(
+            kind,
+            {k: v for k, v in (step.get("data") or {}).items() if k != "text" or len(str(v)) < 8000},
+            study=True,
+        )
+        step["result_id"] = item.get("id")
+    except Exception as exc:  # noqa: BLE001
+        step["persist_error"] = str(exc)[:160]
+    out = {
+        "ok": True,
+        "say": say or f"{kind} « {target[:80]} »",
+        "kind": step.get("kind"),
+        "target": step.get("target"),
+        "engine": step.get("engine"),
+        "browser": step.get("browser"),
+        "hits": step.get("hits") or [],
+        "count": step.get("count", 0),
+        "error": step.get("error"),
+        "next_hint": step.get("next_hint"),
+        "result_id": step.get("result_id"),
+    }
+    return out
 
 
 def _h_add_research_task(args: dict) -> dict:
@@ -483,6 +602,39 @@ def _h_list_research_results(args: dict) -> dict:
 
 
 _SKILL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_YEAR_RE = re.compile(r"^\d{4}$")
+
+# Requêtes pour lesquelles une date de FAIT est indispensable (sinon « dernier »
+# tombe sur n'importe quelle entrée sans chronologie).
+_TEMPORAL_QUERY_TERMS = {
+    "dernier", "derniere", "latest", "newest", "recent", "recente", "recents",
+    "recentes", "nouveau", "nouvelle", "nouveaux", "nouvelles", "modele",
+    "modeles", "model", "models", "jeu", "jeux", "sortie", "sorties", "version",
+    "versions", "release", "lancement",
+}
+
+
+def _looks_temporal(query: str) -> bool:
+    tokens = set(_search_tokens(query))
+    return bool(tokens.intersection(_TEMPORAL_QUERY_TERMS))
+
+
+def _entry_date(entry: dict) -> str:
+    d = str(entry.get("date") or "").strip()
+    return d if _SKILL_DATE_RE.match(d) else ""
+
+
+def _filter_by_as_of(entries: list[dict], as_of: str) -> list[dict]:
+    """Filtre optionnel : jour exact, ou année (faits ≤ 31/12 de cette année)."""
+    as_of = str(as_of or "").strip()
+    if not as_of:
+        return entries
+    if _SKILL_DATE_RE.match(as_of):
+        return [e for e in entries if _entry_date(e) == as_of]
+    if _YEAR_RE.match(as_of):
+        end = f"{as_of}-12-31"
+        return [e for e in entries if _entry_date(e) and _entry_date(e) <= end]
+    return entries
 
 
 def _h_add_knowledge(args: dict) -> dict:
@@ -535,6 +687,7 @@ HANDLERS: dict[str, Callable[[dict], dict]] = {
     "search_knowledge": _h_search_knowledge,
     "modify_prompt_system": _h_modify_prompt_system,
     "request_to_dev": _h_request_to_dev,
+    "web_agent": _h_web_agent,
     "add_research_task": _h_add_research_task,
     "list_research_results": _h_list_research_results,
     "add_knowledge": _h_add_knowledge,
