@@ -593,11 +593,52 @@ LLM_PRESETS = {
 }
 
 
+#: Caractères typographiques qui s'invitent dans un collage de clé (chat,
+#: traitement de texte) et que HTTP refuse dans un en-tête (latin-1 only) :
+#: « — » faisait planter urllib avec UnicodeEncodeError (bug agent v1).
+_KEY_TYPO_FIXES = {
+    "\u2014": "-",  # — tiret cadratin
+    "\u2013": "-",  # – tiret demi-cadratin
+    "\u2212": "-",  # − signe moins
+    "\u2018": "'",  # ‘ apostrophe courbe
+    "\u2019": "'",  # ’ apostrophe courbe
+    "\u201c": '"',  # “ guillemet courbe ouvrant
+    "\u201d": '"',  # ” guillemet courbe fermant
+    "\u00a0": "",   # espace insécable
+    "\u200b": "",   # espace sans chasse
+    "\ufeff": "",   # BOM
+}
+
+
+def sanitize_api_key(raw: str) -> tuple[str, list[str]]:
+    """Nettoie une clé collée : espaces/retours à la ligne, guillemets, BOM,
+    caractères typographiques (— → -…), non-ASCII ignorés. Une clé d'API est
+    ASCII ; retourne (clé propre, avertissements humains)."""
+    notes: list[str] = []
+    key = str(raw or "").replace("\ufeff", "").replace("\u200b", "")
+    key = key.strip().strip('"').strip("'").strip()
+    joined = "".join(key.split())
+    if joined != key:
+        notes.append("espaces/retours à la ligne retirés")
+        key = joined
+    fixed = "".join(_KEY_TYPO_FIXES.get(ch, ch) for ch in key)
+    if fixed != key:
+        notes.append("caractères typographiques convertis (— → -, ’ → '…)")
+        key = fixed
+    bad = sorted({ch for ch in key if ord(ch) > 127})
+    if bad:
+        notes.append("caractères non-ASCII ignorés : " + ", ".join(f"U+{ord(c):04X}" for c in bad))
+        key = "".join(ch for ch in key if ord(ch) <= 127)
+    return key, notes
+
+
 def llm_config_from_env() -> dict | None:
     """Config LLM depuis l'environnement (le notebook met la clé via getpass).
     Retourne None si pas de clé. La clé ne vit qu'en RAM : jamais écrite sur
     disque, jamais poussée au site (les payloads sont expurgés par redact())."""
-    key = (os.environ.get("COLAB_LLM_API_KEY") or "").strip()
+    key, notes = sanitize_api_key(os.environ.get("COLAB_LLM_API_KEY") or "")
+    for n in notes:
+        print(f"  ⚠️ clé API : {n}")
     if not key:
         return None
     provider = (os.environ.get("COLAB_LLM_PROVIDER") or "mistral").strip().lower()
