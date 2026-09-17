@@ -54,6 +54,20 @@
           <h2>Derniers résultats</h2>
           <div id="results-wrap"><span class="muted">Chargement…</span></div>
         </div>
+        <div class="card">
+          <h2>Code — analyseur de discussions</h2>
+          <p class="small muted" style="margin:0 0 12px">
+            <code>colab/analyze_discussions.py</code> — collez tel quel dans une cellule Colab (1 cellule = le script complet).
+            Le code est chargé à la demande ci-dessous.
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn" id="btn-toggle-code" type="button">Afficher le code</button>
+            <button class="btn ghost" id="btn-copy-code" type="button" disabled>Copier le code</button>
+          </div>
+          <div id="code-viewer" style="display:none">
+            <pre id="code-block" class="block" style="max-height:520px;overflow:auto;font-size:12px;line-height:1.45;tab-size:4;white-space:pre;word-break:normal;overflow-wrap:normal"></pre>
+          </div>
+        </div>
       </section>
       <aside>
         <div class="card">
