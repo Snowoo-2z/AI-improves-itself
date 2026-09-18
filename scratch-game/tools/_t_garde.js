@@ -1,0 +1,62 @@
+const VM=require('scratch-vm'), fs=require('fs');
+const vm=new VM();
+vm.attachRenderer(new (require('./fakerender'))());
+vm.attachStorage(new (require('scratch-storage').ScratchStorage)());
+const S=()=>vm.runtime.getTargetForStage();
+const set=(k,v)=>{S().lookupVariableByNameAndType(k,'').value=v;};
+const get=k=>S().lookupVariableByNameAndType(k,'').value;
+const botT=()=>vm.runtime.targets.find(t=>t.getName()==='Bot');
+const cleanBot=()=>{['aiTimer','iBlock','iPunch','iKick','iSpecial','iJump','iMove'].forEach(v=>{const o=botT().lookupVariableByNameAndType(v,'');if(o)o.value=0;});};
+vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
+  vm.start(); vm.greenFlag(); for(let i=0;i<5;i++)vm.runtime._step();
+  const essai=(label,p1Arme,botArme,action,dist,botGarde,botAir)=>{
+    set('scene','fight'); set('phase','intro'); set('phaseTimer',2); set('chrono',600);
+    set('P1HP',200); set('BotHP',200); set('P1Max',200); set('BotMax',200);
+    set('P1Arme',p1Arme); set('BotArme',botArme); set('P1Special',100);
+    cleanBot(); for(let i=0;i<7;i++)vm.runtime._step();
+    set('phase','fight'); set('BotReaction',600); set('BotAggro',0); set('BotVitesse',0); set('hitStop',0);
+    set('P1State','idle'); set('BotState','idle'); set('P1X',-150); set('P1Y',-92);
+    const BotX=-150+dist, BotY=botAir?-40:-92;
+    set('BotX',BotX); set('BotY',BotY);
+    const fixe=()=>{set('BotX',BotX); set('P1X',-150); set('BotVitesse',0); set('BotY',botAir?-40:-92);
+                    if(botGarde){set('BotState','block');}};
+    for(let i=0;i<2;i++){fixe();vm.runtime._step();}
+    const hp0=get('BotHP');
+    vm.postIOData('keyboard',{key:action,isDown:true});
+    for(let i=0;i<5;i++){fixe();vm.runtime._step();}
+    vm.postIOData('keyboard',{key:action,isDown:false});
+    for(let i=0;i<60;i++){fixe();vm.runtime._step(); if(200-get('BotHP')>(hp0-0)&&i>10)break;}
+    console.log(label.padEnd(44),'dégâts',String(hp0-get('BotHP')).padStart(3),'| état bot',get('BotState'));
+  };
+  console.log('--- SANS GARDE (dégâts de base de l\'arme) ---');
+  essai('mains nues : poing',1,1,'j',50,false,false);
+  essai('mains nues : pied',1,1,'k',70,false,false);
+  essai('mains nues : spécial',1,1,'l',85,false,false);
+  essai('épée : poing',2,1,'j',90,false,false);
+  essai('épée : pied',2,1,'k',110,false,false);
+  essai('épée : spécial (estoc)',2,1,'l',120,false,false);
+  essai('lance : pied',3,1,'k',110,false,false);
+  essai('lance : spécial (charge)',3,1,'l',140,false,false);
+  essai('marteau : poing',4,1,'j',80,false,false);
+  essai('marteau : spécial',4,1,'l',95,false,false);
+  essai('arc : poing',5,1,'j',70,false,false);
+  essai('arc : pied -> flèche',5,1,'k',70,false,false);
+  essai('arc : spécial -> salve',5,1,'l',70,false,false);
+  essai('bouclier : poing',6,1,'j',45,false,false);
+  essai('bouclier : pied',6,1,'k',65,false,false);
+  essai('bouclier : spécial',6,1,'l',80,false,false);
+  console.log('--- GARDE AU SOL DU DÉFENSEUR (il fait face) ---');
+  essai('poing mains nues bloqué (12 % -> 1)',1,1,'j',50,true,false);
+  essai('poing vs BOUCLIER bloqué (0 dégât)',1,6,'j',45,true,false);
+  essai('pied vs BOUCLIER bloqué (0 dégât)',1,6,'k',65,true,false);
+  essai('spécial mains nues bloqué (12 %)',1,1,'l',85,true,false);
+  essai('spécial marteau bloqué (perce : 60 %)',4,1,'l',95,true,false);
+  essai('spécial marteau vs BOUCLIER (perce)',4,6,'l',95,true,false);
+  essai('spécial lance bloqué au sol (12 %)',3,1,'l',140,true,false);
+  console.log('--- GARDE AÉRIENNE DU DÉFENSEUR (briseurs) ---');
+  essai('pied vs garde aérienne (brise : 50 %)',1,1,'k',70,true,true);
+  essai('pied vs garde aérienne BOUCLIER (20 %)',1,6,'k',70,true,true);
+  essai('estoc épée vs garde aérienne (pas briseur)',2,1,'l',120,true,true);
+  essai('marteau vs garde aérienne BOUCLIER',4,6,'l',95,true,true);
+  process.exit(0);
+}).catch(e=>{console.error(e);process.exit(1)});

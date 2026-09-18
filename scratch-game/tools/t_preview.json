@@ -1,0 +1,333 @@
+{
+ "steps": [
+  {
+   "set": {
+    "scene": "menu",
+    "niveauMax": 4,
+    "pieces": 640,
+    "P1Arme": 2,
+    "P1ArmeOrig": 2
+   },
+   "wait": 8,
+   "shot": "p_menu"
+  },
+  {
+   "set": {
+    "scene": "select",
+    "niveauApercu": 6
+   },
+   "wait": 8,
+   "shot": "p_select"
+  },
+  {
+   "set": {
+    "scene": "shop",
+    "shopPage": 2,
+    "pieces": 1000,
+    "P1Arme": 2,
+    "P1ArmeOrig": 2,
+    "armeApercu": 2
+   },
+   "list": {
+    "armePossede": [
+     1,
+     1,
+     0,
+     0,
+     0,
+     1
+    ],
+    "armeNiveau": [
+     5,
+     4,
+     1,
+     1,
+     1,
+     3
+    ]
+   },
+   "wait": 8,
+   "shot": "p_armes"
+  },
+  {
+   "set": {
+    "scene": "shop",
+    "shopPage": 1,
+    "pieces": 1000
+   },
+   "wait": 8,
+   "shot": "p_look"
+  },
+  {
+   "set": {
+    "scene": "shop",
+    "shopPage": 3,
+    "pieces": 900,
+    "P1Arme": 2,
+    "P1ArmeOrig": 2,
+    "armeApercu": 2,
+    "niveauMax": 4
+   },
+   "list": {
+    "armePossede": [
+     1,
+     1,
+     1,
+     0,
+     0,
+     0
+    ],
+    "armeNiveau": [
+     3,
+     3,
+     2,
+     1,
+     1,
+     1
+    ],
+    "talPts": [
+     1,
+     2,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "wait": 8,
+   "shot": "p_atelier"
+  },
+  {
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 4,
+    "P1ArmeOrig": 4,
+    "BotArme": 6,
+    "niveau": 8,
+    "P1Special": 100,
+    "BotNom": "Le Champion",
+    "BotTeinte": 25
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "block",
+    "P1X": -150,
+    "BotX": -60,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 600,
+    "BotAggro": 0,
+    "BotVitesse": 0
+   },
+   "wait": 2
+  },
+  {
+   "hold": "l",
+   "frames": 5
+  },
+  {
+   "loop": {
+    "frames": 40,
+    "each": {
+     "set": {
+      "BotX": -60,
+      "P1X": -150,
+      "BotState": "block"
+     }
+    },
+    "stop": "BotHP<200"
+   },
+   "wait": 3,
+   "shot": "p_marteau"
+  },
+  {
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5,
+    "BotArme": 6,
+    "niveau": 8,
+    "P1Special": 0,
+    "BotNom": "Le Champion",
+    "BotTeinte": 25
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -190,
+    "BotX": 40,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 300,
+    "BotAggro": 0,
+    "BotVitesse": 0,
+    "BotGarde": 0
+   },
+   "wait": 2
+  },
+  {
+   "hold": "k",
+   "frames": 5
+  },
+  {
+   "loop": {
+    "frames": 16,
+    "each": {
+     "set": {
+      "BotX": 40,
+      "P1X": -190
+     }
+    },
+    "stop": "BotHP<200"
+   },
+   "wait": 3,
+   "shot": "p_fleche"
+  },
+  {
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5,
+    "BotArme": 1,
+    "niveau": 1,
+    "P1Special": 100,
+    "BotNom": "Le Champion",
+    "BotTeinte": 25
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -190,
+    "BotX": 120,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 900,
+    "BotAggro": 0,
+    "BotVitesse": 0,
+    "BotGarde": 0
+   },
+   "wait": 2
+  },
+  {
+   "hold": "l",
+   "frames": 5
+  },
+  {
+   "loop": {
+    "frames": 18,
+    "each": {
+     "set": {
+      "BotX": 120,
+      "P1X": -190
+     }
+    },
+    "stop": "BotHP<200"
+   },
+   "wait": 3,
+   "shot": "p_salve"
+  },
+  {
+   "set": {
+    "scene": "save",
+    "niveauMax": 4,
+    "pieces": 640,
+    "codeSauvegarde": "5-01234-001-01-1-1-19-4-151111-000000000000-55"
+   },
+   "wait": 8,
+   "shot": "p_save"
+  },
+  {
+   "set": {
+    "scene": "fight",
+    "phase": "intro",
+    "phaseTimer": 2,
+    "chrono": 600,
+    "P1HP": 200,
+    "BotHP": 200,
+    "P1Max": 200,
+    "BotMax": 200,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5,
+    "BotArme": 6,
+    "niveau": 8,
+    "P1Special": 0,
+    "BotNom": "Le Champion",
+    "BotTeinte": 25
+   },
+   "wait": 8
+  },
+  {
+   "set": {
+    "phase": "fight",
+    "P1State": "idle",
+    "BotState": "idle",
+    "P1X": -120,
+    "BotX": 60,
+    "P1Y": -92,
+    "BotY": -92,
+    "BotReaction": 600,
+    "BotAggro": 0,
+    "BotVitesse": 0
+   },
+   "wait": 3
+  },
+  {
+   "hold": "u",
+   "frames": 3
+  },
+  {
+   "loop": {
+    "frames": 30,
+    "each": {
+     "set": {
+      "BotX": 60,
+      "BotState": "idle",
+      "P1X": -120
+     }
+    },
+    "stop": "BotHP<0"
+   },
+   "wait": 3,
+   "shot": "p_bulle"
+  }
+ ]
+}
