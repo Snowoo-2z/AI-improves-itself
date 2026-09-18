@@ -118,13 +118,13 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async()=>{
   // ---- 5) le code de sauvegarde emporte les talents (36 chiffres)
   combat(4,4,[[4,'A',3],[4,'B',0]]);
   set('pieces',1234); set('niveauMax',5);
-  set('scene','menu'); step(3); clic(28,-112); step(4);   // bouton SAUVER
+  set('scene','menu'); step(3); clic(28,-116); step(4);   // bouton SAUVER
   const code=String(get('codeSauvegarde')).replace(/[^0-9]/g,'');
   ok('code 36 chiffres', code.length===36, 'code = '+get('codeSauvegarde')+' ('+code.length+' chiffres)');
   // on remet tout à zéro puis on recharge
   L('talPts').fill(0); set('P1Arme',1);
   vm.runtime.on('QUESTION',q=>{ if(q!==null) setTimeout(()=>vm.runtime.emit('ANSWER', String(get('codeSauvegarde'))),1); });
-  set('scene','menu'); step(3); clic(134,-112);
+  set('scene','menu'); step(3); clic(134,-116);
   for(let i=0;i<120;i++){ vm.runtime._step(); VT+=33; await new Promise(r=>setTimeout(r,0)); }  // ask-and-wait + chargement
   ok('talents restaurés par le code', pts(4,'A')===3,
      'après chargement : voie A du marteau = '+pts(4,'A')+' | info = '+get('infoSauvegarde'));

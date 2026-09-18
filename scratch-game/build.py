@@ -747,21 +747,21 @@ U.script(define("dessinerMenu", [], [
     bouton(80, -76, 200, 42, "COMMANDES", "commandes", COL["grey"], 50),
     bouton(28, -116, 100, 32, "SAUVER", "sauver", COL["ok"], 32),
     bouton(134, -116, 100, 32, "CHARGER", "charger", COL["sp"], 32),
-    if_(gt(var("phaseTimer"), 0), [
+    # au centre de la barre du bas : le message de sauvegarde s'il y en a un, sinon l'arme équipée
+    if_else(gt(var("phaseTimer"), 0), [
         change_var("phaseTimer", -1),
         if_else(eq(var("infoSauvegarde"), "Code invalide"), [
             ecrire(var("infoSauvegarde"), 80, -158, 28, 0, 1),
         ], [
             ecrire(var("infoSauvegarde"), 80, -158, 28, 67, 1),
         ]),
+    ], [
+        ecrire(join(item("armeNom", var("P1ArmeOrig")), join(" niv.", item("armeNiveau", var("P1ArmeOrig")))),
+               -14, -156, 26, 30, 1),
     ]),
     rect(-240, -150, 480, 40, "#000000", 40),
     ecrire(join(var("pieces"), " pièces"), -228, -156, 40, 30, 0),
     if_(eq(var("phaseTimer"), 0), [ecrire(join("Niveau max : ", var("niveauMax")), 228, -156, 40, -1, 2)]),
-    # carte du combattant : l'aperçu (sprite) se dessine par-dessus, la carte reste derrière
-    ecrire("TON COMBATTANT", -228, 76, 24, 178, 0),
-    ecrire(join(item("armeNom", var("P1ArmeOrig")), join(" niv.", item("armeNiveau", var("P1ArmeOrig")))),
-           -134, -140, 26, 30, 1),
 ]))
 
 # --- écran COMMANDES
@@ -1840,7 +1840,7 @@ def fighter_scripts(t, me, op, is_player):
             if_else(or_(eq(var("scene"), "menu"), eq(var("scene"), "shop")), [
                 show(), setV("Vis", 1),
                 setV("Size", 85),
-                setV("X", -156), setV("Y", -124), setV("Dir", 90),
+                setV("X", -150), setV("Y", -110), setV("Dir", 90),
                 setV("State", "idle"), set_var("vx", 0), set_var("vy", 0),
                 if_(eq(var("scene"), "menu"), [setV("State", "win")]),
                 if_(and_(eq(var("scene"), "menu"), lt(mod(var("frame"), 60), 30)), [setV("State", "idle")]),

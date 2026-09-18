@@ -36,7 +36,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   // clic sur CHARGER + réponse à la question « colle ton code » (l'ANSWER doit être émis entre deux images)
   // le bloc « demander et attendre » rend une promesse : il faut laisser tourner
   // la boucle de micro-tâches entre deux images pour que le thread reparte
-  const charger=async (code)=>{ reponse=code; clic(134,-112);
+  const charger=async (code)=>{ reponse=code; clic(134,-116);
     for(let i=0;i<60;i++){ vm.runtime._step();
       if(questionEnAttente){ vm.runtime.emit('ANSWER',reponse); questionEnAttente=null; }
       await Promise.resolve(); } };
@@ -94,7 +94,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   // 9) sauvegarde : clic sur SAUVER au menu
   set('scene','menu'); set('pieces',900); set('niveauMax',5); set('P1Arme',5); set('P1ArmeOrig',5);
   setL('armePossede',2,1); setL('armePossede',5,1);
-  step(3); clic(28,-112); step(3);
+  step(3); clic(28,-116); step(3);
   const code=get('codeSauvegarde');
   console.log('9) code de sauvegarde =', code, '(', code.replace(/-/g,'').length, 'chiffres, 36 attendus ; niveaux =', S().lookupVariableByNameAndType('armeNiveau','list').value.join(''), ')');
   // 10) rechargement du code : arme retrouvée

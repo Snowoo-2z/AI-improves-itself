@@ -14,7 +14,7 @@ const clic=(x,y)=>{vm.postIOData('mouse',{x:x+240,y:180-y,isDown:true,canvasWidt
   vm.postIOData('mouse',{x:x+240,y:180-y,isDown:false,canvasWidth:480,canvasHeight:360});step(3);};
 let question=null;
 vm.runtime.on('QUESTION',q=>{if(q!==null)question=q;});
-const charger=async(code)=>{clic(134,-112);
+const charger=async(code)=>{clic(134,-116);
   for(let i=0;i<80;i++){vm.runtime._step(); if(question){vm.runtime.emit('ANSWER',code);question=null;} await Promise.resolve();}};
 vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async()=>{
   vm.start(); vm.greenFlag(); step(5); fs.mkdirSync('out',{recursive:true});
@@ -64,7 +64,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async()=>{
   LV(1); console.log('6) dégâts à mains nues (niveau 1) —', mesure(1,'poings'));
   LV(2); console.log('   épée niveau 5 —', mesure(2,'épée'), '(9 / 13 / 26 au niveau 1)');
   // ---- 7) sauvegarde : les niveaux partent dans le code et reviennent
-  set('scene','menu'); set('pieces',1500); set('niveauMax',6); step(3); clic(28,-112); step(3);
+  set('scene','menu'); set('pieces',1500); set('niveauMax',6); step(3); clic(28,-116); step(3);
   const code=get('codeSauvegarde');
   console.log('7) code =', code, '|', code.replace(/-/g,'').length, 'chiffres (36 attendus)');
   LV(2); L('armeNiveau')[1]=1; set('pieces',0); set('scene','menu'); step(2);

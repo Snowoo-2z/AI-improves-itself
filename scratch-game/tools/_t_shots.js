@@ -51,7 +51,7 @@ vm.loadProject(fs.readFileSync('../dist/ArenaClash.sb3')).then(async ()=>{
   set('niveauMax',5); set('pieces',1234); set('P1Arme',5); set('P1ArmeOrig',5);
   L('armePossede')[4]=1;
   set('scene','menu'); souris(-400,-400,false); step(3);
-  souris(28,-112,true); step(1); souris(28,-112,false); step(4);
+  souris(28,-116,true); step(1); souris(28,-116,false); step(4);
   console.log('scene =', get('scene'), '| code =', get('codeSauvegarde'));
   R.toPNG('out/s_code.png');
   process.exit(0);
