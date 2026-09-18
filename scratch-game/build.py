@@ -127,7 +127,7 @@ for v, d in [
     ("dernierNiveauGagne", 0), ("P1Vis", 0), ("BotVis", 0), ("codeSauvegarde", ""), ("infoSauvegarde", ""), ("P1HitType", ""), ("BotHitType", ""),
     ("P1Arme", 1), ("BotArme", 1), ("P1ArmeOrig", 1), ("BotArmeOrig", 1), ("armeApercu", 1), ("shopPage", 1),
     ("flX", 0), ("flY", 0), ("flDir", 90), ("flWho", 1), ("flDmg", 13), ("fxVie", 90), ("fxWho", 1),
-    ("P1BulleT", 0), ("P1BulleCd", 0),
+    ("P1BulleT", 0), ("P1BulleCd", 0), ("fxFort", 0),
     ("P1ArmeMain", 1), ("BotArmeMain", 1), ("armeMain", 1), ("pNiv", 0), ("pNivTxt", "111111"),
 ]:
     S.add_var(v, d)
@@ -271,8 +271,11 @@ for t in (accP1, accBot):
     t.visible = False
 
 for fn, svg in assets.fx_svgs().items():
-    fx.add_costume(fn, svg, {"spark": 30, "dot": 12, "ring": 40, "bolt": 20, "pixel": 2, "bulle": 70}[fn],
-                   {"spark": 30, "dot": 12, "ring": 40, "bolt": 30, "pixel": 2, "bulle": 70}[fn])
+    _FXC = {"spark": (30, 30), "dot": (12, 12), "ring": (40, 40), "bolt": (20, 30), "pixel": (2, 2),
+        "bulle": (70, 70), "etoile": (35, 35), "eclair": (40, 30), "poussiere": (15, 15)}
+for fn, svg in assets.fx_svgs().items():
+    cx, cy = _FXC[fn]
+    fx.add_costume(fn, svg, cx, cy)
 fx.visible = False
 
 for gname, svg, cx, cy, adv in glyphs:
@@ -289,6 +292,16 @@ fleche.visible = False
 add_sounds(fleche, ["tir", "hit"])
 ui.visible = False
 add_sounds(ui, ["click", "coin", "win", "lose", "round", "ko"])
+
+# Logo du jeu : costume vectoriel unique (créé en dernier, il passe donc devant l'interface).
+# Affiché seulement dans le menu principal, il remplace l'ancien titre tamponné glyphe par glyphe.
+logo = P.sprite("Logo")
+logo.add_costume("logo", assets.logo_svg(), assets.LOGO_W / 2, assets.LOGO_H / 2)
+logo.visible = False
+# (le forever DOIT être accroché au drapeau : un bloc C isolé ne tourne jamais)
+logo.script(when_flag(), set_size(46), goto_xy(0, 124), hide(), forever([
+    if_else(eq(var("scene"), "menu"), [show()], [hide()]),
+]))
 
 # ================================================================== INTERFACE (moteur texte + écrans)
 U = ui
@@ -310,20 +323,22 @@ U.script(define("rect %s %s %s %s %s %s", ["x", "y", "w", "h", "couleur", "trans
         pen_down(), pen_up(),
     ], [
         if_else(gt(arg("h"), 48), [
-            # grand panneau : coins arrondis de rayon 24, rempli par bandes
-            set_var("px", 24),
-            set_var("n", mathop("ceiling", div(sub(arg("h"), 24), 12))),
-            set_var("py", sub(add(arg("y"), div(arg("h"), 2)), 12)),
+            # grand panneau : coins arrondis de rayon 24, rempli par bandes horizontales
+            # (pas de 8 px pour un stylo de 24 : les bandes se chevauchent, aucun trou)
             pen_size(24),
-            repeat(add(var("n"), 1), [
+            set_var("py", sub(add(arg("y"), div(arg("h"), 2)), 12)),
+            repeat_until(lt(var("py"), add(sub(arg("y"), div(arg("h"), 2)), 12)), [
                 goto_xy(add(arg("x"), 12), var("py")),
                 pen_down(),
                 goto_xy(sub(add(arg("x"), arg("w")), 12), var("py")),
                 pen_up(),
-                change_var("py", -12),
-                if_(lt(var("py"), add(sub(arg("y"), div(arg("h"), 2)), 12)), [set_var("py", add(sub(arg("y"), div(arg("h"), 2)), 12))]),
+                change_var("py", -8),
             ]),
-            # cœur du panneau (sans double alpha : une seule bande large)
+            # dernière bande collée au bas du panneau (sinon le bord reste déchiqueté)
+            goto_xy(add(arg("x"), 12), add(sub(arg("y"), div(arg("h"), 2)), 12)),
+            pen_down(),
+            goto_xy(sub(add(arg("x"), arg("w")), 12), add(sub(arg("y"), div(arg("h"), 2)), 12)),
+            pen_up(),
         ], [
             pen_size(arg("h")),
             goto_xy(add(arg("x"), div(arg("h"), 2)), arg("y")),
@@ -724,27 +739,29 @@ U.script(define("dessinerSauvegarde", [], [
 
 # --- écran MENU
 U.script(define("dessinerMenu", [], [
-    rect(-240, 120, 480, 70, "#000000", 55),
-    ecrire("ARENA CLASH", 3, 97, 115, -3, 1),
-    ecrire("ARENA CLASH", 0, 100, 115, 178, 1),
-    ecrire("Combat 2D - Arène - Bots - Cosmétiques", 0, 62, 36, -2, 1),
-    bouton(80, 30, 200, 42, "JOUER", "jouer", COL["accent"], 50),
-    bouton(80, -18, 200, 42, "BOUTIQUE", "boutique", COL["accent2"], 50),
-    bouton(80, -66, 200, 42, "COMMANDES", "commandes", COL["grey"], 50),
-    bouton(28, -112, 100, 34, "SAUVER", "sauver", COL["ok"], 32),
-    bouton(134, -112, 100, 34, "CHARGER", "charger", COL["sp"], 32),
+    # le titre est un vrai logo vectoriel (sprite Logo, posé au-dessus) : ici on ne garde
+    # que la baseline et l'accroche de la boutique
+    ecrire("COMBAT 2D - 8 BOTS - 6 ARMES - 4 ARÈNES", 0, 46, 24, -2, 1),
+    bouton(80, 20, 200, 42, "JOUER", "jouer", COL["accent"], 50),
+    bouton(80, -28, 200, 42, "BOUTIQUE", "boutique", COL["accent2"], 50),
+    bouton(80, -76, 200, 42, "COMMANDES", "commandes", COL["grey"], 50),
+    bouton(28, -116, 100, 32, "SAUVER", "sauver", COL["ok"], 32),
+    bouton(134, -116, 100, 32, "CHARGER", "charger", COL["sp"], 32),
     if_(gt(var("phaseTimer"), 0), [
         change_var("phaseTimer", -1),
         if_else(eq(var("infoSauvegarde"), "Code invalide"), [
-            ecrire(var("infoSauvegarde"), 80, -156, 30, 0, 1),
+            ecrire(var("infoSauvegarde"), 80, -158, 28, 0, 1),
         ], [
-            ecrire(var("infoSauvegarde"), 80, -156, 30, 67, 1),
+            ecrire(var("infoSauvegarde"), 80, -158, 28, 67, 1),
         ]),
     ]),
     rect(-240, -150, 480, 40, "#000000", 40),
     ecrire(join(var("pieces"), " pièces"), -228, -156, 40, 30, 0),
     if_(eq(var("phaseTimer"), 0), [ecrire(join("Niveau max : ", var("niveauMax")), 228, -156, 40, -1, 2)]),
-    ecrire("Ton combattant", -150, -128, 32, -2, 1),
+    # carte du combattant : l'aperçu (sprite) se dessine par-dessus, la carte reste derrière
+    ecrire("TON COMBATTANT", -228, 76, 24, 178, 0),
+    ecrire(join(item("armeNom", var("P1ArmeOrig")), join(" niv.", item("armeNiveau", var("P1ArmeOrig")))),
+           -134, -140, 26, 30, 1),
 ]))
 
 # --- écran COMMANDES
@@ -1545,8 +1562,8 @@ def fighter_scripts(t, me, op, is_player):
                     setV("State", "hurt"), set_var("timer", 18),
                     set_var("vx", mul(V("HitDir"), 8)), set_var("vy", 5),
                     set_var("hitStop", 4), play_sound("hit"),
-                    set_var("fxType", "spark"), set_var("fxX", V("X")), set_var("fxY", add(V("Y"), 60)),
-                    create_clone("FX"),
+                    set_var("fxX", V("X")), set_var("fxY", add(V("Y"), 60)), set_var("fxFort", 2),
+                    broadcast("fxImpact"),
                 ], [
                     # 12 % de dégâts de garde... sauf au bouclier, qui bloque à 100 %
                     set_var("dmg", 0.12),
@@ -1568,9 +1585,13 @@ def fighter_scripts(t, me, op, is_player):
                 set_var("hitStop", 3),
                 play_sound("hit"),
                 set_var("fxType", "spark"),
-            ] + hit_fx + [create_clone("FX"), set_var("fxType", "dot")]
-                # 6 particules : deroule (une boucle rendrait la main image par image)
-                + [create_clone("FX")] * 6),
+            ] + hit_fx + [
+                # éclat : étoile sur un coup lourd (charge / smash), étincelle sinon — la diffusion
+                # passe par le sprite FX, dont le clone recopie les variables locales au bon moment
+                set_var("fxFort", 0),
+                if_(or_(eq(V("HitType"), "charge"), eq(V("HitType"), "smash")), [set_var("fxFort", 1)]),
+                broadcast("fxImpact"),
+            ]),
             if_(gt(V("Special"), 100), [setV("Special", 100)]),
             if_(lt(V("HP"), 0), [setV("HP", 0)]),
             setV("Hit", 0),
@@ -1819,7 +1840,7 @@ def fighter_scripts(t, me, op, is_player):
             if_else(or_(eq(var("scene"), "menu"), eq(var("scene"), "shop")), [
                 show(), setV("Vis", 1),
                 setV("Size", 85),
-                setV("X", -150), setV("Y", -110), setV("Dir", 90),
+                setV("X", -156), setV("Y", -124), setV("Dir", 90),
                 setV("State", "idle"), set_var("vx", 0), set_var("vy", 0),
                 if_(eq(var("scene"), "menu"), [setV("State", "win")]),
                 if_(and_(eq(var("scene"), "menu"), lt(mod(var("frame"), 60), 30)), [setV("State", "idle")]),
@@ -1919,7 +1940,20 @@ fx.add_var("vx", 0)
 fx.add_var("vy", 0)
 fx.add_var("who", 1)
 fx.add_var("typeActuel", "")
+fx.add_var("typeFx", "")
+fx.add_var("estClone", 0)
 fx.script(when_flag(), hide())
+fx.script(*([when_broadcast("fxImpact"),
+    # un clone reçoit lui aussi les diffusions : seul l'original fabrique les effets
+    if_(eq(var("estClone"), 0), [
+    set_var("typeActuel", "spark"),
+    if_(eq(var("fxFort"), 1), [set_var("typeActuel", "etoile")]),
+    if_(eq(var("fxFort"), 2), [set_var("typeActuel", "eclair")]),
+    set_var("fxVie", 16),
+    create_clone("FX"),
+    set_var("typeActuel", "dot"), set_var("fxVie", 40),
+] + [create_clone("FX")] * 6 + [set_var("typeActuel", "")]),
+    ]))
 fx.script(
     when_broadcast("fxBulle"),
     # la variable locale est recopiée dans le clone au moment du clonage : le bulle est identifiable
@@ -1927,6 +1961,7 @@ fx.script(
 )
 fx.script(
     when_clone_start(),
+    set_var("estClone", 1),
     if_else(eq(var("typeActuel"), "bulle"), [
         switch_costume("bulle"),
         set_var("life", var("fxVie")),
@@ -1941,30 +1976,49 @@ fx.script(
         ]),
         delete_clone(),
     ], [
-    switch_costume(var("fxType")),
+    # typeActuel est posé juste avant la création du clone (donc propre à lui), fxType est le
+    # type par défaut : plusieurs clones créés la même image ne se mélangent plus.
+    set_var("typeFx", var("fxType")),
+    if_(not_(eq(var("typeActuel"), "")), [set_var("typeFx", var("typeActuel"))]),
+    switch_costume(var("typeFx")),
     set_var("life", var("fxVie")),
     goto_xy(var("fxX"), var("fxY")),
     clear_effects(),
     go_front(),
-    if_(eq(var("fxType"), "spark"), [
+    if_(eq(var("typeFx"), "spark"), [
         set_size(60), point_dir(random(-180, 180)), show(),
         repeat(7, [change_size(14), change_effect("GHOST", 14), Blk("motion_turnright", {"DEGREES": 12})]),
     ]),
-    if_(eq(var("fxType"), "ring"), [
+    if_(eq(var("typeFx"), "ring"), [
         set_size(30), point_dir(90), set_effect("COLOR", 100), show(),
         repeat(8, [change_size(18), change_effect("GHOST", 12)]),
     ]),
-    if_(eq(var("fxType"), "dot"), [
+    if_(eq(var("typeFx"), "dot"), [
         set_size(random(40, 90)), point_dir(90), set_effect("COLOR", var("fxTeinte")), show(),
         set_var("vx", random(-8, 8)), set_var("vy", random(2, 10)),
         repeat(14, [
             change_x(var("vx")), change_y(var("vy")), change_var("vy", -0.9), change_effect("GHOST", 7), change_size(-4),
         ]),
     ]),
-    if_(eq(var("fxType"), "bolt"), [
+    if_(eq(var("typeFx"), "bolt"), [
         set_size(random(60, 110)), point_dir(90), show(),
         change_x(random(-40, 40)), change_y(random(-10, 40)),
         repeat(10, [change_y(6), change_effect("GHOST", 10)]),
+    ]),
+    # étoile : gros coup (charge / smash) — elle tourne et grossit en s'effaçant
+    if_(eq(var("typeFx"), "etoile"), [
+        set_size(40), point_dir(90), show(),
+        repeat(9, [change_size(12), change_effect("GHOST", 11), Blk("motion_turnright", {"DEGREES": 9})]),
+    ]),
+    # éclair : garde brisée par le marteau
+    if_(eq(var("typeFx"), "eclair"), [
+        set_size(70), point_dir(90), show(),
+        repeat(8, [change_size(10), change_effect("GHOST", 13)]),
+    ]),
+    # poussière : retombée au sol (le clone suit son porteur grâce à fxWho)
+    if_(eq(var("typeFx"), "poussiere"), [
+        set_size(60), point_dir(90), set_effect("GHOST", 20), show(),
+        repeat(10, [change_size(9), change_effect("GHOST", 8), change_y(-1.5)]),
     ]),
     delete_clone(),
     ]),

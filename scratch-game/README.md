@@ -5,6 +5,8 @@ avec des graphismes 100 % vectoriels, dessinés procéduralement.
 
 ![Aperçu](preview.png)
 
+![Miniature](preview-mini.png)
+
 ## ▶️ Jouer
 
 1. Télécharge **[`dist/ArenaClash.sb3`](dist/ArenaClash.sb3)**.
@@ -85,6 +87,9 @@ pour réinvestir autrement — les bonus s'appliquent au round suivant.
 
 ## 🧩 Contenu
 
+- **Logo vectoriel** : écusson dégradé et lettrage « ARENA CLASH » en contours de police (aucun
+  texte tamponné glyphe par glyphe), affiché seulement dans le menu principal — il sert aussi de
+  vignette (`preview-mini.png`).
 - **Menu** complet : Jouer / Boutique / Commandes, aperçu de ton combattant, pièces et progression.
 - **8 bots de plus en plus forts** (PV, vitesse, agressivité, garde et temps de réaction croissants), chacun avec son look et son accessoire :
   `Kid Bleu → Verdo → Sunny → Violette → Cyan-X → Rosa → Ombre → Le Champion`.
@@ -94,6 +99,10 @@ pour réinvestir autrement — les bonus s'appliquent au round suivant.
 - **Sauvegarde de progression** : bouton *SAUVER* → code du type `5-01234-001-01-1-1-17-4-111111-000000000000-03` (36 chiffres : niveau max, pièces, cosmétiques, armes possédées/équipées, **niveaux des 6 armes** et **points de talent investis**, avec somme de contrôle) ; *CHARGER* → colle le code. Les codes invalides sont refusés, et les anciens codes à 15, 18 ou 24 chiffres restent acceptés (leurs armes repartent au niveau 1, sans talent).
 - **Économie** : 100 pièces au départ, `40 + 30 × niveau` par victoire, 10 en cas de défaite.
 - **Feeling de combat** : hit-stop, flash écran au K.O., étincelles, particules, effet de garde, combo compteur, anim. de victoire / K.O., 12 sons synthétisés (dont le claquement de corde de l'arc).
+  Chaque effet garde **son** apparence : étincelle sur un coup normal, **étoile** sur un coup lourd
+  (charge / smash), **éclair** quand la garde se brise, poussière et bulle pour le reste.
+- **Panneaux dessinés au stylo sans trou** : les fonds arrondis sont remplis par bandes qui se
+  chevauchent (le pas de 12 px laissait des lignes visibles sur les grands panneaux).
 - **Moteur de texte vectoriel** : la police (DejaVu Sans Bold, accents inclus) est embarquée sous forme de costumes SVG et tamponnée au stylo → texte net et aligné dans tous les menus.
 
 ## 🛠 Régénérer le projet
@@ -108,7 +117,7 @@ python3 scratch-game/build.py      # -> scratch-game/dist/ArenaClash.sb3
 | `sb3lib.py` | mini-DSL Python → blocs Scratch 3 (`if_`, `repeat`, `define`/`call`, stylo, etc.) et assemblage du `.sb3` |
 | `assets.py` | génération des SVG (combattant en 12 poses **pour chacune des 6 armes**, par cinématique directe ; accessoires, armes, décors, FX) et des sons WAV |
 | `build.py` | tout le gameplay : machine d'états des combattants, armes (stats, niveaux, projectiles), IA des bots, HUD, menus, boutique, sauvegarde |
-| `tools/` | harnais de test headless : `cd tools && npm i && bash test.sh` rejoue tous les scénarios dans la vraie VM Scratch (dégâts par arme, niveaux, boutique, sauvegarde, combat complet) et capture les écrans dans `tools/out/` ; `node play.js ../dist/ArenaClash.sb3 t_preview.json` régénère les captures de `preview.png` / `preview-fight.png` |
+| `tools/` | harnais de test headless : `cd tools && npm i && bash test.sh` rejoue tous les scénarios dans la vraie VM Scratch (dégâts par arme, niveaux, boutique, sauvegarde, combat complet, effets) et capture les écrans dans `tools/out/` ; `node play.js ../dist/ArenaClash.sb3 t_preview.json` régénère les captures de `preview.png` / `preview-fight.png` ; `python3 miniature.py && node svg2png.js out/miniature.svg ../preview-mini.png` compose la vignette |
 
 Pour ajouter un bot, une arme ou un cosmétique, il suffit d'ajouter une ligne dans `BOTS`, `ARMES`, `ACCS` ou `SKINS`
 dans `build.py` (les listes Scratch, la boutique, les sauvegardes et les descriptions suivent automatiquement).
@@ -129,6 +138,8 @@ dans `build.py` (les listes Scratch, la boutique, les sauvegardes et les descrip
 - **Bouclier** (`tools/_t_bulle.js`, 7 contrôles verts) : touche U → ~88 images actives puis ~148 de recharge,
   une attaque de 40 dégâts n'en fait plus que 12 (−70 %), la bulle suit bien le combattant, elle ne se
   confond plus avec les autres effets (le type était lu une image trop tard) et la jauge du HUD suit l'état réel.
+- **Effets visuels** (`tools/_t_fx.js`) : coup normal → étincelle + 6 particules, coup lourd → étoile,
+  garde brisée → éclair, aucun clone qui fuit après 4 s, et logo visible seulement dans le menu.
 - **Talents** (`tools/_t_talents.js`) : points gagnés par niveau, refus au-delà, respec gratuit par `EFFACER`,
   effets mesurés — Danse 109 → 127 px en 1 s, Broyeur 46 → 66 dégâts, Estoc 0 → 13 dégâts à 160 px,
   Rempart 100 → 84 dégâts subis, Tir tendu 29 → 9 images de rechargement — et les 12 chiffres de talents

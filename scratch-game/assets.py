@@ -60,6 +60,113 @@ def build_glyphs():
     return out
 
 
+# ------------------------------------------------------------------ Logo & éléments d'interface
+
+from fontTools.pens.transformPen import TransformPen  # noqa: E402
+
+
+def _texte_path(txt, taille, x=0.0, y=0.0, espace_f=0.0):
+    """Contours RÉELS du texte (police du jeu) dans un seul <path> :
+    rendu net à n'importe quelle taille, contrairement au texte tamponné glyphe par glyphe.
+    x, y = coin gauche de la ligne de base ; espace_f = interlettrage en fraction de la taille.
+    Renvoie (d, largeur)."""
+    font = TTFont(FONT_PATH)
+    glyph_set = font.getGlyphSet()
+    cmap = font.getBestCmap()
+    scale = taille / font["head"].unitsPerEm
+    espace = taille * espace_f
+    parts, cursor = [], x
+    for ch in txt:
+        if ch == " ":
+            cursor += taille * 0.30 + espace
+            continue
+        if ch == "\u00b7":                      # « · » n'est pas dans la police embarquée
+            cs = _cercle((cursor + taille * 0.12, y - taille * 0.30), taille * 0.075, "#ffffff")
+            parts.append(cs)
+            cursor += taille * 0.24 + espace
+            continue
+        pen = SVGPathPen(glyph_set)
+        glyph_set[cmap[ord(ch)]].draw(TransformPen(pen, (scale, 0, 0, -scale, cursor, y)))
+        parts.append(pen.getCommands())
+        cursor += glyph_set[cmap[ord(ch)]].width * scale + espace
+    return " ".join(parts), max(0.0, cursor - x - espace)
+
+
+def _texte_largeur(txt, taille, espace_f=0.0):
+    return _texte_path(txt, taille, 0, 0, espace_f)[1]
+
+
+def _texte_centre(txt, taille, cx, y, espace_f=0.0):
+    """Chemin du texte centré horizontalement sur cx, avec ajustement automatique de la
+    taille pour ne pas dépasser max_w (la largeur est proportionnelle à la taille)."""
+    w = _texte_largeur(txt, taille, espace_f)
+    d, w = _texte_path(txt, taille, cx - w / 2.0, y, espace_f)
+    return d, w
+
+
+def _texte_ajuste(txt, cy, max_w, max_h, espace_f=0.0):
+    """Renvoie (chemin, largeur) centré sur l'écusson ; la taille est réduite pour tenir
+    à la fois en largeur (max_w) et en hauteur de capitale (max_h)."""
+    taille = 100.0
+    w = _texte_largeur(txt, taille, espace_f)
+    taille = min(taille * max_w / w, max_h / 0.715)
+    return _texte_centre(txt, taille, LOGO_W / 2.0, cy, espace_f)
+
+
+LOGO_W, LOGO_H = 640, 250
+_LOGO_INK = "#180a2a"
+
+
+def _logo_texte(txt, cy, max_w, max_h, espace_f, c1, c2, gid, contour=9):
+    """Lettrage du logo : contour sombre épais + remplissage dégradé."""
+    d, w = _texte_ajuste(txt, cy, max_w, max_h, espace_f)
+    return (
+        f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0.15" y2="1">'
+        f'<stop offset="0" stop-color="{c1}"/><stop offset="0.55" stop-color="{c2}"/>'
+        f'<stop offset="1" stop-color="{c1}"/></linearGradient></defs>'
+        f'<path d="{d}" fill="{_LOGO_INK}" stroke="{_LOGO_INK}" stroke-width="{contour}" '
+        f'stroke-linejoin="round"/>'
+        f'<path d="{d}" fill="url(#{gid})" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.4"/>'
+    ), w
+
+
+def logo_svg():
+    """Logo du jeu : écusson dégradé + lettrage vectoriel « ARENA CLASH »."""
+    W, H = LOGO_W, LOGO_H
+    # épées croisées derrière le lettrage (bien visibles dans les coins)
+    a, _ = _logo_texte("ARENA", 88, 380, 50, 0.14, "#ffffff", "#bcd6ff", "lgA", contour=8)
+    b, _ = _logo_texte("CLASH", 198, 452, 80, 0.03, "#ffd54a", "#ff7a00", "lgB", contour=11)
+    coins = "".join(
+        f'<path d="M {cx} {cy+sign*30} L {cx} {cy} L {cx+sign*30} {cy}" fill="none" '
+        f'stroke="#ff9ad2" stroke-width="5" stroke-linecap="round"/>'
+        for cx, cy, sign in ((46, 46, 1), (W - 46, 46, -1), (46, H - 46, 1), (W - 46, H - 46, -1)))
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+        '<defs>'
+        '<linearGradient id="fond" x1="0" y1="0" x2="0.3" y2="1">'
+        '<stop offset="0" stop-color="#3a1470"/><stop offset="0.5" stop-color="#1b0a33"/>'
+        '<stop offset="1" stop-color="#0d0518"/></linearGradient>'
+        '<linearGradient id="barre" x1="0" y1="0" x2="1" y2="0">'
+        '<stop offset="0" stop-color="#ff2d95" stop-opacity="0"/><stop offset="0.5" stop-color="#ff2d95"/>'
+        '<stop offset="1" stop-color="#ff2d95" stop-opacity="0"/></linearGradient>'
+        '</defs>'
+        # halo
+        f'<rect x="6" y="6" width="{W-12}" height="{H-12}" rx="42" fill="#ff2d95" opacity="0.40"/>'
+        f'<rect x="12" y="12" width="{W-24}" height="{H-24}" rx="38" fill="#7c4dff" opacity="0.40"/>'
+        # écusson
+        f'<rect x="20" y="20" width="{W-40}" height="{H-40}" rx="32" fill="url(#fond)" '
+        f'stroke="#ff2d95" stroke-width="7"/>'
+        f'<rect x="31" y="31" width="{W-62}" height="{H-62}" rx="24" fill="none" '
+        f'stroke="#ffffff" stroke-opacity="0.14" stroke-width="2"/>'
+        + "".join(f'<polygon points="{x},31 {x+36},31 {x-18},{H-31} {x-54},{H-31}" fill="#ffffff" opacity="0.05"/>'
+                  for x in (150, 300, 450, 600))
+        + a
+        + f'<rect x="{W/2-140}" y="116" width="280" height="7" rx="3.5" fill="url(#barre)"/>'
+        + b
+        + coins
+        + '</svg>')
+
+
 # ------------------------------------------------------------------ Combattant
 
 SUIT = "#e53935"
@@ -520,6 +627,19 @@ def fx_svgs():
                   '<circle cx="70" cy="70" r="64" fill="#7fd4ff" fill-opacity="0.16" stroke="#c9f0ff" stroke-width="6"/>'
                   '<circle cx="70" cy="70" r="58" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.55"/>'
                   '<ellipse cx="46" cy="40" rx="16" ry="10" fill="#ffffff" fill-opacity="0.35" transform="rotate(-28 46 40)"/></svg>')
+    # étincelle en étoile (K.O., impacts violents)
+    F["etoile"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70">'
+                   '<polygon points="35,0 42,26 70,35 42,44 35,70 28,44 0,35 28,26" fill="#fff59d" '
+                   'stroke="#ffd54a" stroke-width="3"/>'
+                   '<circle cx="35" cy="35" r="9" fill="#ffffff"/></svg>')
+    # éclat de lame / impact
+    F["eclair"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="60" viewBox="0 0 80 60">'
+                   '<polygon points="6,30 40,18 74,30 40,42" fill="#ffffff" fill-opacity="0.9"/>'
+                   '<polygon points="26,30 40,24 54,30 40,36" fill="#7cf6ff"/></svg>')
+    # poussière (réception de saut, course)
+    F["poussiere"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">'
+                      '<circle cx="15" cy="15" r="13" fill="#ffffff" fill-opacity="0.55"/>'
+                      '<circle cx="15" cy="15" r="8" fill="#ffffff" fill-opacity="0.8"/></svg>')
     F["pixel"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4" viewBox="0 0 4 4">'
                   '<rect width="4" height="4" fill="#ffffff"/></svg>')
     return F
