@@ -28,7 +28,6 @@ BOTS = [
     ("Ombre", 0, -70, 150, 5.4, 75, 60, 5, 100, "cyber", "cornes", 2, 3),
     ("Le Champion", 25, 20, 180, 5.8, 85, 70, 4, 108, "cyber", "couronne", 4, 4),
 ]
-ARENE_NOM = {"dojo": "Dojo", "toits": "Toits", "volcan": "Volcan", "cyber": "Cyber"}
 ACCS = [  # id, nom affiché, prix
     ("aucun", "Aucun", 0), ("bandeau", "Bandeau", 60), ("casquette", "Casquette", 80),
     ("lunettes", "Lunettes", 90), ("chat", "Oreilles", 120), ("cornes", "Cornes", 150),
@@ -71,7 +70,6 @@ ARMES = [
      "Allonge réduite."),
 ]
 ARME_NIVEAU_MAX = 5
-ARME_NOM = [a[0] for a in ARMES]
 ARME_PRIX = [a[1] for a in ARMES]
 ARME_COST = [a[2] for a in ARMES]
 ARME_PORTEE = [a[3] for a in ARMES]
@@ -90,9 +88,6 @@ ARME_INCK = [a[15] for a in ARMES]
 ARME_INCS = [a[16] for a in ARMES]
 ARME_INCR = [a[17] for a in ARMES]
 ARME_UPG = [a[18] for a in ARMES]
-ARME_L1 = [a[19] for a in ARMES]
-ARME_L2 = [a[20] for a in ARMES]
-ARME_L3 = [a[21] for a in ARMES]
 
 FLECHE_VITESSE = 9
 FLECHE_VIE = 55            # portée : 55 x 9 = 495 px (l'arène fait 480 de large)
@@ -129,10 +124,11 @@ for v, d in [
     ("flX", 0), ("flY", 0), ("flDir", 90), ("flWho", 1), ("flDmg", 13), ("fxVie", 90), ("fxWho", 1),
     ("P1BulleT", 0), ("P1BulleCd", 0), ("fxFort", 0),
     ("P1ArmeMain", 1), ("BotArmeMain", 1), ("armeMain", 1), ("pNiv", 0), ("pNivTxt", "111111"),
+    ("langue", ""),
 ]:
     S.add_var(v, d)
 
-S.add_list("botNom", [b[0] for b in BOTS])
+S.add_list("botNom", ["bot%d" % (i + 1) for i in range(len(BOTS))])  # clés i18n
 S.add_list("botTeinte", [b[1] for b in BOTS])
 S.add_list("botLum", [b[2] for b in BOTS])
 S.add_list("botPV", [b[3] for b in BOTS])
@@ -142,21 +138,21 @@ S.add_list("botGarde", [b[6] for b in BOTS])
 S.add_list("botReaction", [b[7] for b in BOTS])
 S.add_list("botTaille", [b[8] for b in BOTS])
 S.add_list("botArene", [b[9] for b in BOTS])
-S.add_list("botAreneNom", [ARENE_NOM[b[9]] for b in BOTS])
+S.add_list("botAreneNom", ["arene_" + b[9] for b in BOTS])  # clés i18n
 S.add_list("botAccessoire", [b[10] for b in BOTS])
 S.add_list("botArme", [b[11] for b in BOTS])
 S.add_list("accId", [a[0] for a in ACCS])
-S.add_list("accNom", [a[1] for a in ACCS])
+S.add_list("accNom", ["acc_" + a[0] for a in ACCS])  # clés i18n
 S.add_list("accPrix", [a[2] for a in ACCS])
 S.add_list("accPossede", [1] + [0] * (len(ACCS) - 1))
-S.add_list("skinNom", [s[0] for s in SKINS])
+S.add_list("skinNom", ["skin%d" % (i + 1) for i in range(len(SKINS))])  # clés i18n
 S.add_list("skinTeinte", [s[1] for s in SKINS])
 S.add_list("skinLum", [s[2] for s in SKINS])
 S.add_list("skinPrix", [s[3] for s in SKINS])
 S.add_list("skinPossede", [1] + [0] * (len(SKINS) - 1))
 S.add_list("CODE DE SAUVEGARDE", [])
 # --- armes : données de jeu + armes au sol (2 emplacements)
-S.add_list("armeNom", ARME_NOM)
+S.add_list("armeNom", ["arme%d" % (i + 1) for i in range(len(ARMES))])  # clés i18n
 S.add_list("armePrix", ARME_PRIX)
 S.add_list("armeCost", ARME_COST)
 S.add_list("armePortee", ARME_PORTEE)
@@ -170,9 +166,9 @@ S.add_list("armeSpeTot", ARME_SPETOT)
 S.add_list("armeSpePortee", ARME_SPEPORTEE)
 S.add_list("armeGarde", ARME_GARDE)
 S.add_list("armeProj", ARME_PROJ)
-S.add_list("armeL1", ARME_L1)
-S.add_list("armeL2", ARME_L2)
-S.add_list("armeL3", ARME_L3)
+S.add_list("armeL1", ["al1_%d" % (i + 1) for i in range(len(ARMES))])  # clés i18n
+S.add_list("armeL2", ["al2_%d" % (i + 1) for i in range(len(ARMES))])  # clés i18n
+S.add_list("armeL3", ["al3_%d" % (i + 1) for i in range(len(ARMES))])  # clés i18n
 S.add_list("armePossede", [1] + [0] * (len(ARMES) - 1))
 S.add_list("armeNiveau", [1] * len(ARMES))          # niveau 1..5 de chaque arme (joueur)
 S.add_list("armeIncP", ARME_INCP)
@@ -183,25 +179,317 @@ S.add_list("armeUpgBase", ARME_UPG)
 S.add_list("botArmeNiv", [b[12] for b in BOTS])
 
 # --- arbre de talents : deux voies par arme, 1 point par niveau au-dessus de 1.
-#     (voie A : nom, stat, incrément par point, texte ; idem voie B)
+#     (voie A : stat, incrément par point ; idem voie B)
+#     Les noms et textes des talents vivent dans TR_FR / TR_EN (clés tal<k><A|B>[_t]).
 TALENTES = {
-    1: (("Furie", "dmg", 2, "+2 dégâts par point"), ("Ombre", "dash", 2, "esquive +2 images par point")),
-    2: (("Estoc", "range", 12, "+12 portée par point"), ("Danse", "vit", 0.4, "+0,4 vitesse par point")),
-    3: (("Charge", "spe", 4, "+4 dégâts de charge par point"), ("Allonge", "range", 12, "+12 portée par point")),
-    4: (("Broyeur", "spe", 5, "+5 dégâts de smash par point"), ("Acier", "def", 5, "-5 % dégâts subis par point")),
-    5: (("Tir tendu", "cut", 4, "recharge -4 images par point"), ("Tir lourd", "dmg", 3, "+3 dégâts par point")),
-    6: (("Rempart", "def", 4, "-4 % dégâts subis par point"), ("Regain", "regen", 1, "+1 PV / 25 images par point")),
+    1: (("dmg", 2), ("dash", 2)),
+    2: (("range", 12), ("vit", 0.4)),
+    3: (("spe", 4), ("range", 12)),
+    4: (("spe", 5), ("def", 5)),
+    5: (("cut", 4), ("dmg", 3)),
+    6: (("def", 4), ("regen", 1)),
 }
+
+# ------------------------------------------------------------------ i18n (FR / EN)
+# À la mise en route (drapeau vert), le joueur choisit français ou anglais : la variable
+# globale `langue` prend "fr" ou "en". Toutes les chaînes affichées passent par le bloc
+# `trad %s` (clé -> texte dans la langue choisie, français par défaut). Les listes de noms
+# (botNom, accNom, skinNom, armeNom, botAreneNom, talNomA/B, talTxtA/B) stockent des clés.
+TR_FR = {
+    # menu
+    "menu_tagline": "COMBAT 2D - 8 BOTS - 6 ARMES - 4 ARÈNES",
+    "menu_jouer": "JOUER",
+    "menu_boutique": "BOUTIQUE",
+    "menu_commandes": "COMMANDES",
+    "menu_sauver": "SAUVER",
+    "menu_charger": "CHARGER",
+    "menu_pieces": "pièces",
+    "menu_niveau_max": "Niveau max : ",
+    "retour": "RETOUR",
+    "menu_menu": "MENU",
+    # commandes
+    "cmd_titre": "COMMANDES",
+    "cmd1": "Flèches gauche / droite : se déplacer",
+    "cmd2": "Double-appui sur une flèche : esquive invulnérable",
+    "cmd3": "Flèche haut : sauter (on attaque en l'air)",
+    "cmd4": "Flèche bas : garde (12 % des dégâts, 0 avec le bouclier)",
+    "cmd5": "U : bouclier 3 s (-70 % des dégâts), puis 5 s de recharge",
+    "cmd6": "J : poing  K : pied (flèche avec l'arc)  L : SPÉCIAL",
+    "cmd7": "Boutique : achète, équipe, améliore l'arme jusqu'au niveau 5",
+    "cmd8": "Atelier : 1 point de talent par niveau, 2 voies par arme,",
+    "cmd9": "à répartir et à changer quand tu veux.",
+    # sélection
+    "sel_titre": "CHOISIS TON ADVERSAIRE",
+    "sel_sous": "Chaque victoire débloque le suivant",
+    "sel_pv": "PV : ",
+    "sel_arene": "Arène : ",
+    "sel_survole1": "Survole un",
+    "sel_survole2": "adversaire",
+    # boutique
+    "shop_titre": "BOUTIQUE",
+    "shop_acc": "Accessoires",
+    "shop_couleurs": "Couleurs",
+    "shop_acheter": "Clique pour acheter puis pour équiper",
+    "shop_apercu": "Aperçu",
+    "tab_look": "LOOK",
+    "tab_armes": "ARMES",
+    "tab_talents": "TALENTS",
+    "armes_titre": "ARMES",
+    "atelier": "ATELIER",
+    "ameliore": "AMÉLIORER",
+    "niveau_max": "NIVEAU MAX",
+    "achat": "Achat : ",
+    "equipee": "ÉQUIPÉE",
+    "achetee_eq": "Achetée : cliquer pour équiper",
+    "cliquer_acheter": "Cliquer sur l'arme pour l'acheter",
+    "points_placer": "Points à placer : ",
+    "points_info": "(1 par niveau, modifiable)",
+    "voie_a": "VOIE A",
+    "voie_b": "VOIE B",
+    "investi": "investi : ",
+    "effacer": "EFFACER",
+    "niv_short": "niv.",
+    "niv_long": "Niv.",
+    "stat_poing": "Poing",
+    "stat_pied": "Pied",
+    "stat_fleche": "Flèche",
+    "stat_spe": "Spé",
+    "stat_allonge": "Allonge",
+    # HUD
+    "hud_toi": "TOI",
+    "hud_special": "SPÉCIAL PRÊT (L)",
+    "hud_bouclier": "BOUCLIER (U)",
+    "hud_k_salve": "K : tir / L : salve",
+    "hud_hits": "HITS !",
+    "hud_intro": "Double-appui : esquive   U : bouclier   Flèches : bouger / sauter / garde   J/K/L : attaques",
+    # combat
+    "round": "ROUND",
+    "fight": "FIGHT !",
+    "temps": "TEMPS !",
+    "ko": "K.O. !",
+    "round_toi": "Round pour toi !",
+    "round_bot": "Round pour",
+    "egalite": "Égalité",
+    # résultat
+    "res_victoire": "VICTOIRE !",
+    "res_battu": "Tu as battu ",
+    "res_battu2": " !",
+    "res_defaite": "DÉFAITE",
+    "res_tropfort": " était trop fort...",
+    "res_debloque": "Nouvel adversaire débloqué !",
+    "res_rejouer": "REJOUER",
+    "res_suivant": "SUIVANT",
+    # sauvegarde
+    "save_titre": "TON CODE DE SAUVEGARDE",
+    "save_l1": "Note ce code (ou copie-le dans la liste à l'écran).",
+    "save_l2": "Au prochain lancement : Menu, CHARGER, puis colle le code.",
+    "save_l3": "Il contient : niveau max, pièces, armes (niveaux + talents) et cosmétiques.",
+    "msg_piece": "Pas assez de pièces !",
+    "msg_points": "Plus de points : améliore l'arme !",
+    "msg_points_ok": "Points rendus !",
+    "msg_max": "Niveau maximum !",
+    "msg_charge_ok": "Progression chargée !",
+    "msg_charge_bad": "Code invalide",
+    "ask_code": "Colle ton code de sauvegarde puis appuie sur Entrée :",
+    # bots
+    "bot1": "Kid Bleu", "bot2": "Verdo", "bot3": "Sunny", "bot4": "Violette",
+    "bot5": "Cyan-X", "bot6": "Rosa", "bot7": "Ombre", "bot8": "Le Champion",
+    # arènes
+    "arene_dojo": "Dojo", "arene_toits": "Toits", "arene_volcan": "Volcan", "arene_cyber": "Cyber",
+    # accessoires
+    "acc_aucun": "Aucun", "acc_bandeau": "Bandeau", "acc_casquette": "Casquette",
+    "acc_lunettes": "Lunettes", "acc_chat": "Oreilles", "acc_cornes": "Cornes",
+    "acc_chapeau": "Chapeau", "acc_aureole": "Auréole", "acc_couronne": "Couronne",
+    # couleurs
+    "skin1": "Rouge", "skin2": "Bleu", "skin3": "Vert", "skin4": "Or", "skin5": "Violet", "skin6": "Noir",
+    # armes
+    "arme1": "Poings", "arme2": "Épée", "arme3": "Lance", "arme4": "Marteau",
+    "arme5": "Arc", "arme6": "Bouclier",
+    # armes : descriptions (al<1|2|3>_<k>)
+    "al1_1": "Style de référence, sans défaut.", "al2_1": "Spécial : coup direct.",
+    "al3_1": "Aucune allonge bonus.",
+    "al1_2": "Frappe vite et loin.", "al2_2": "Spécial : estoc qui avance.",
+    "al3_2": "Récupération plus longue.",
+    "al1_3": "La plus grande allonge.", "al2_3": "Spécial : CHARGE qui fonce.",
+    "al3_3": "Poing faible au niveau 1.",
+    "al1_4": "Brise la garde (60 % des dégâts).", "al2_4": "Spécial : smash qui sonne.",
+    "al3_4": "Très lent : 52 images.",
+    "al1_5": "Combat à distance.", "al2_5": "Spécial : salve de 3 flèches.",
+    "al3_5": "Corps à corps faible.",
+    "al1_6": "Garde : 0 dégât subi.", "al2_6": "Garde brisée : 20 % au lieu de 50 %.",
+    "al3_6": "Allonge réduite.",
+    # talents (tal<k><A|B> : nom, _t : texte)
+    "tal1A": "Furie", "tal1A_t": "+2 dégâts par point",
+    "tal1B": "Ombre", "tal1B_t": "esquive +2 images par point",
+    "tal2A": "Estoc", "tal2A_t": "+12 portée par point",
+    "tal2B": "Danse", "tal2B_t": "+0,4 vitesse par point",
+    "tal3A": "Charge", "tal3A_t": "+4 dégâts de charge par point",
+    "tal3B": "Allonge", "tal3B_t": "+12 portée par point",
+    "tal4A": "Broyeur", "tal4A_t": "+5 dégâts de smash par point",
+    "tal4B": "Acier", "tal4B_t": "-5 % dégâts subis par point",
+    "tal5A": "Tir tendu", "tal5A_t": "recharge -4 images par point",
+    "tal5B": "Tir lourd", "tal5B_t": "+3 dégâts par point",
+    "tal6A": "Rempart", "tal6A_t": "-4 % dégâts subis par point",
+    "tal6B": "Regain", "tal6B_t": "+1 PV / 25 images par point",
+}
+TR_EN = {
+    # menu
+    "menu_tagline": "2D COMBAT - 8 BOTS - 6 WEAPONS - 4 ARENAS",
+    "menu_jouer": "PLAY",
+    "menu_boutique": "SHOP",
+    "menu_commandes": "CONTROLS",
+    "menu_sauver": "SAVE",
+    "menu_charger": "LOAD",
+    "menu_pieces": "coins",
+    "menu_niveau_max": "Max level: ",
+    "retour": "BACK",
+    "menu_menu": "MENU",
+    # controls
+    "cmd_titre": "CONTROLS",
+    "cmd1": "Left / right arrows: move",
+    "cmd2": "Double-tap an arrow: invincible dash",
+    "cmd3": "Up arrow: jump (you can attack in the air)",
+    "cmd4": "Down arrow: guard (12% damage, 0 with the shield)",
+    "cmd5": "U: 3s shield (-70% damage), then 5s recharge",
+    "cmd6": "J: punch  K: kick (arrow with the bow)  L: SPECIAL",
+    "cmd7": "Shop: buy, equip and upgrade weapons up to level 5",
+    "cmd8": "Workshop: 1 talent point per level, 2 paths per weapon,",
+    "cmd9": "to spend and re-allocate any time you like.",
+    # select
+    "sel_titre": "CHOOSE YOUR OPPONENT",
+    "sel_sous": "Each victory unlocks the next one",
+    "sel_pv": "HP: ",
+    "sel_arene": "Arena: ",
+    "sel_survole1": "Hover over",
+    "sel_survole2": "an opponent",
+    # shop
+    "shop_titre": "SHOP",
+    "shop_acc": "Accessories",
+    "shop_couleurs": "Colors",
+    "shop_acheter": "Click to buy, then click to equip",
+    "shop_apercu": "Preview",
+    "tab_look": "LOOK",
+    "tab_armes": "WEAPONS",
+    "tab_talents": "TALENTS",
+    "armes_titre": "WEAPONS",
+    "atelier": "WORKSHOP",
+    "ameliore": "UPGRADE",
+    "niveau_max": "MAX LEVEL",
+    "achat": "Buy: ",
+    "equipee": "EQUIPPED",
+    "achetee_eq": "Owned: click to equip",
+    "cliquer_acheter": "Click the weapon to buy it",
+    "points_placer": "Points to spend: ",
+    "points_info": "(1 per level, can be changed)",
+    "voie_a": "PATH A",
+    "voie_b": "PATH B",
+    "investi": "spent: ",
+    "effacer": "RESET",
+    "niv_short": "lv.",
+    "niv_long": "Lv.",
+    "stat_poing": "Punch",
+    "stat_pied": "Kick",
+    "stat_fleche": "Arrow",
+    "stat_spe": "Spec",
+    "stat_allonge": "Reach",
+    # HUD
+    "hud_toi": "YOU",
+    "hud_special": "SPECIAL READY (L)",
+    "hud_bouclier": "SHIELD (U)",
+    "hud_k_salve": "K: shot / L: volley",
+    "hud_hits": "HITS!",
+    "hud_intro": "Double-tap: dash   U: shield   Arrows: move / jump / guard   J/K/L: attacks",
+    # combat
+    "round": "ROUND",
+    "fight": "FIGHT!",
+    "temps": "TIME!",
+    "ko": "K.O!",
+    "round_toi": "Round for you!",
+    "round_bot": "Round for",
+    "egalite": "Draw",
+    # result
+    "res_victoire": "VICTORY!",
+    "res_battu": "You defeated ",
+    "res_battu2": "!",
+    "res_defaite": "DEFEAT",
+    "res_tropfort": " was too strong...",
+    "res_debloque": "New opponent unlocked!",
+    "res_rejouer": "REPLAY",
+    "res_suivant": "NEXT",
+    # save
+    "save_titre": "YOUR SAVE CODE",
+    "save_l1": "Write this code down (or copy it from the list on screen).",
+    "save_l2": "Next launch: menu, LOAD, then paste the code.",
+    "save_l3": "It holds: max level, coins, weapons (levels + talents) and cosmetics.",
+    "msg_piece": "Not enough coins!",
+    "msg_points": "No more points: upgrade the weapon!",
+    "msg_points_ok": "Points refunded!",
+    "msg_max": "Max level reached!",
+    "msg_charge_ok": "Progress loaded!",
+    "msg_charge_bad": "Invalid code",
+    "ask_code": "Paste your save code then press Enter:",
+    # bots
+    "bot1": "Blue Kid", "bot2": "Verdo", "bot3": "Sunny", "bot4": "Violette",
+    "bot5": "Cyan-X", "bot6": "Rosa", "bot7": "Shadow", "bot8": "The Champion",
+    # arenas
+    "arene_dojo": "Dojo", "arene_toits": "Rooftops", "arene_volcan": "Volcano", "arene_cyber": "Cyber",
+    # accessories
+    "acc_aucun": "None", "acc_bandeau": "Headband", "acc_casquette": "Cap",
+    "acc_lunettes": "Glasses", "acc_chat": "Ears", "acc_cornes": "Horns",
+    "acc_chapeau": "Hat", "acc_aureole": "Halo", "acc_couronne": "Crown",
+    # colors
+    "skin1": "Red", "skin2": "Blue", "skin3": "Green", "skin4": "Gold", "skin5": "Purple", "skin6": "Black",
+    # weapons
+    "arme1": "Fists", "arme2": "Sword", "arme3": "Spear", "arme4": "Hammer",
+    "arme5": "Bow", "arme6": "Shield",
+    # weapons: descriptions (al<1|2|3>_<k>)
+    "al1_1": "The baseline style, no weakness.", "al2_1": "Special: straight punch.",
+    "al3_1": "No bonus reach.",
+    "al1_2": "Hits fast and far.", "al2_2": "Special: a thrust that moves forward.",
+    "al3_2": "Slower recovery.",
+    "al1_3": "The longest reach.", "al2_3": "Special: a CHARGE that rams.",
+    "al3_3": "Weak punch at level 1.",
+    "al1_4": "Breaks guard (60% of damage).", "al2_4": "Special: a stunning smash.",
+    "al3_4": "Very slow: 52 frames.",
+    "al1_5": "Ranged combat.", "al2_5": "Special: 3-arrow volley.",
+    "al3_5": "Weak up close.",
+    "al1_6": "Guard: 0 damage taken.", "al2_6": "Guard broken: 20% instead of 50%.",
+    "al3_6": "Reduced reach.",
+    # talents
+    "tal1A": "Fury", "tal1A_t": "+2 damage per point",
+    "tal1B": "Shadow", "tal1B_t": "dash +2 frames per point",
+    "tal2A": "Thrust", "tal2A_t": "+12 reach per point",
+    "tal2B": "Dance", "tal2B_t": "+0.4 speed per point",
+    "tal3A": "Charge", "tal3A_t": "+4 charge damage per point",
+    "tal3B": "Reach", "tal3B_t": "+12 reach per point",
+    "tal4A": "Crusher", "tal4A_t": "+5 smash damage per point",
+    "tal4B": "Steel", "tal4B_t": "-5% damage taken per point",
+    "tal5A": "Drawn Bow", "tal5A_t": "reload -4 frames per point",
+    "tal5B": "Heavy Shot", "tal5B_t": "+3 damage per point",
+    "tal6A": "Bulwark", "tal6A_t": "-4% damage taken per point",
+    "tal6B": "Regain", "tal6B_t": "+1 HP / 25 frames per point",
+}
+for _k in TR_FR:
+    assert _k in TR_EN, f"clé {(_k)!r} manquante en anglais"
+for _k in TR_EN:
+    assert _k in TR_FR, f"clé {(_k)!r} manquante en français"
+
+# --- i18n : tables de traduction (fr / en) + résultat du bloc `trad`
+S.add_list("trKey", list(TR_FR.keys()))
+S.add_list("trFR", list(TR_FR.values()))
+S.add_list("trEN", list(TR_EN.values()))
+S.add_var("trR", "")
+
 TAL_VAR = {"dmg": "talDmg", "spe": "talSpe", "range": "talRange", "vit": "talVit",
            "def": "talParry", "cut": "talCut", "dash": "talDash", "regen": "talRegen"}
-S.add_list("talNomA", [TALENTES[k][0][0] for k in sorted(TALENTES)])
-S.add_list("talNomB", [TALENTES[k][1][0] for k in sorted(TALENTES)])
-S.add_list("talStatA", [TALENTES[k][0][1] for k in sorted(TALENTES)])
-S.add_list("talStatB", [TALENTES[k][1][1] for k in sorted(TALENTES)])
-S.add_list("talIncA", [TALENTES[k][0][2] for k in sorted(TALENTES)])
-S.add_list("talIncB", [TALENTES[k][1][2] for k in sorted(TALENTES)])
-S.add_list("talTxtA", [TALENTES[k][0][3] for k in sorted(TALENTES)])
-S.add_list("talTxtB", [TALENTES[k][1][3] for k in sorted(TALENTES)])
+S.add_list("talNomA", ["tal%dA" % k for k in sorted(TALENTES)])       # clés i18n
+S.add_list("talNomB", ["tal%dB" % k for k in sorted(TALENTES)])       # clés i18n
+S.add_list("talStatA", [TALENTES[k][0][0] for k in sorted(TALENTES)])
+S.add_list("talStatB", [TALENTES[k][1][0] for k in sorted(TALENTES)])
+S.add_list("talIncA", [TALENTES[k][0][1] for k in sorted(TALENTES)])
+S.add_list("talIncB", [TALENTES[k][1][1] for k in sorted(TALENTES)])
+S.add_list("talTxtA", ["tal%dA_t" % k for k in sorted(TALENTES)])     # clés i18n
+S.add_list("talTxtB", ["tal%dB_t" % k for k in sorted(TALENTES)])     # clés i18n
 S.add_list("talPts", [0] * (2 * len(TALENTES)))          # points investis (2 par arme)
 S.add_list("talEffet", ["", "", "", "", "", "", "", ""])  # non utilisé : résumé texte recalculé
 # variables de la page TALENTS
@@ -309,8 +597,23 @@ for v in ["cx", "i", "ch", "prefix", "bx", "by", "bw", "bh", "hover", "k", "rati
           "padded", "bits", "mult", "digits", "part", "somme", "ok", "pBitsArmes", "pArmeCode", "pNivTxt",
           "pTalTxt", "pTal", "dep", "maxi",
           # aperçu d'arme : valeurs courantes / niveau suivant
-          "dmP", "dmK", "dmS", "allg", "nxP", "nxK", "nxS", "nxR", "cout", "sA", "sB", "m", "lab"]:
+          "dmP", "dmK", "dmS", "allg", "nxP", "nxK", "nxS", "nxR", "cout", "sA", "sB", "m", "lab",
+          # i18n : captures de résultats `trad` successifs (trR est le dernier)
+          "t1", "t2", "t3", "t4"]:
     U.add_var(v, 0)
+
+# --- bloc : trad clé  ->  trR (texte de la clé dans la langue choisie ; fr si langue vide)
+U.script(define("trad %s", ["cle"], [
+    set_var("trR", ""),
+    set_var("i", 1),
+    repeat_until(or_(eq(item("trKey", var("i")), arg("cle")), gt(var("i"), list_len("trKey"))), [
+        change_var("i", 1),
+    ]),
+    if_(le(var("i"), list_len("trKey")), [
+        if_else(eq(var("langue"), "en"), [set_var("trR", item("trEN", var("i")))],
+                [set_var("trR", item("trFR", var("i")))]),
+    ]),
+]))
 
 # --- bloc : rect x y w h couleur transparence  (x = bord gauche, y = centre vertical, coins arrondis)
 U.script(define("rect %s %s %s %s %s %s", ["x", "y", "w", "h", "couleur", "transp"], [
@@ -480,16 +783,21 @@ U.script(define("apercuArme %s", ["k"], [
     set_var("nxS", add(item("armeSpeDmg", arg("k")), mul(var("m"), item("armeIncS", arg("k"))))),
     set_var("nxR", add(item("armePortee", arg("k")), mul(var("m"), item("armeIncR", arg("k"))))),
     # l'arc n'a pas de coup de pied : c'est la flèche qui part
-    set_var("lab", "Pied "),
-    if_(eq(item("armeProj", arg("k")), 1), [set_var("lab", "Flèche ")]),
+    call("trad %s", "stat_pied"),
+    set_var("lab", var("trR")),
+    if_(eq(item("armeProj", arg("k")), 1), [call("trad %s", "stat_fleche"), set_var("lab", var("trR"))]),
+    # étiquettes de stats (fr / en selon la langue choisie)
+    call("trad %s", "stat_poing"), set_var("t1", var("trR")),
+    call("trad %s", "stat_spe"), set_var("t2", var("trR")),
+    call("trad %s", "stat_allonge"), set_var("t3", var("trR")),
     if_else(lt(var("n"), ARME_NIVEAU_MAX), [
-        set_var("sA", join4("Poing ", var("dmP"), "  →  ",
-                            join4(var("nxP"), join("   ", var("lab")), var("dmK"), join("  →  ", var("nxK"))))),
-        set_var("sB", join4("Spé ", var("dmS"), "  →  ",
-                            join4(var("nxS"), "    Allonge +", var("allg"), join("  →  +", var("nxR"))))),
+        set_var("sA", join4(join(var("t1"), " "), var("dmP"), "  →  ",
+                            join4(var("nxP"), join("   ", join(var("lab"), " ")), var("dmK"), join("  →  ", var("nxK"))))),
+        set_var("sB", join4(join(var("t2"), " "), var("dmS"), "  →  ",
+                            join(var("nxS"), join4("    ", var("t3"), join(" +", var("allg")), join("  →  +", var("nxR")))))),
     ], [
-        set_var("sA", join4("Poing ", var("dmP"), join("    ", var("lab")), var("dmK"))),
-        set_var("sB", join4("Spé ", var("dmS"), "    Allonge +", var("allg"))),
+        set_var("sA", join4(join(var("t1"), " "), var("dmP"), join("    ", join(var("lab"), " ")), var("dmK"))),
+        set_var("sB", join3(join(var("t2"), " "), var("dmS"), join(join("    ", var("t3")), join(" +", var("allg"))))),
     ]),
     set_var("cout", mul(item("armeUpgBase", arg("k")), var("n"))),
 ]))
@@ -716,10 +1024,11 @@ U.script(define("chargerCode %s", ["code"], [
             set_var("niveau", var("niveauMax")),
         ]),
     ]),
+    # clé i18n (le menu traduit à l'affichage)
     if_else(eq(var("ok"), 1), [
-        set_var("infoSauvegarde", "Progression chargée !"), play_sound("coin"),
+        set_var("infoSauvegarde", "msg_charge_ok"), play_sound("coin"),
     ], [
-        set_var("infoSauvegarde", "Code invalide"), play_sound("lose"),
+        set_var("infoSauvegarde", "msg_charge_bad"), play_sound("lose"),
     ]),
     set_var("phaseTimer", 90),
 ]))
@@ -727,64 +1036,125 @@ U.script(define("chargerCode %s", ["code"], [
 # --- écran SAUVEGARDE
 U.script(define("dessinerSauvegarde", [], [
     rect(-200, 10, 400, 260, COL["panel"], 15),
-    ecrire("TON CODE DE SAUVEGARDE", 0, 100, 60, 30, 1),
+    call("trad %s", "save_titre"),
+    ecrire(var("trR"), 0, 100, 60, 30, 1),
     rect(-200, 40, 400, 56, "#000000", 30),
     # 36 chiffres + 10 tirets : police adaptée pour que le code tienne dans le cadre
     ecrire(var("codeSauvegarde"), 0, 30, 28, -1, 1),
-    ecrire("Note ce code (ou copie-le dans la liste à l'écran).", 0, -10, 30, -1, 1),
-    ecrire("Au prochain lancement : Menu, CHARGER, puis colle le code.", 0, -32, 30, -1, 1),
-    ecrire("Il contient : niveau max, pièces, armes (niveaux + talents) et cosmétiques.", 0, -58, 22, -2, 1),
-    bouton(0, -110, 160, 40, "RETOUR", "menu", COL["grey"], 42),
+    call("trad %s", "save_l1"),
+    ecrire(var("trR"), 0, -10, 30, -1, 1),
+    call("trad %s", "save_l2"),
+    ecrire(var("trR"), 0, -32, 30, -1, 1),
+    call("trad %s", "save_l3"),
+    ecrire(var("trR"), 0, -58, 22, -2, 1),
+    call("trad %s", "retour"),
+    bouton(0, -110, 160, 40, var("trR"), "menu", COL["grey"], 42),
 ]))
 
 # --- écran MENU
 U.script(define("dessinerMenu", [], [
     # le titre est un vrai logo vectoriel (sprite Logo, posé au-dessus) : ici on ne garde
     # que la baseline et l'accroche de la boutique
-    ecrire("COMBAT 2D - 8 BOTS - 6 ARMES - 4 ARÈNES", 0, 46, 24, -2, 1),
-    bouton(80, 20, 200, 42, "JOUER", "jouer", COL["accent"], 50),
-    bouton(80, -28, 200, 42, "BOUTIQUE", "boutique", COL["accent2"], 50),
-    bouton(80, -76, 200, 42, "COMMANDES", "commandes", COL["grey"], 50),
-    bouton(28, -116, 100, 32, "SAUVER", "sauver", COL["ok"], 32),
-    bouton(134, -116, 100, 32, "CHARGER", "charger", COL["sp"], 32),
+    call("trad %s", "menu_tagline"),
+    ecrire(var("trR"), 0, 46, 24, -2, 1),
+    call("trad %s", "menu_jouer"),
+    bouton(80, 20, 200, 42, var("trR"), "jouer", COL["accent"], 50),
+    call("trad %s", "menu_boutique"),
+    bouton(80, -28, 200, 42, var("trR"), "boutique", COL["accent2"], 50),
+    call("trad %s", "menu_commandes"),
+    bouton(80, -76, 200, 42, var("trR"), "commandes", COL["grey"], 50),
+    call("trad %s", "menu_sauver"),
+    bouton(28, -116, 100, 32, var("trR"), "sauver", COL["ok"], 32),
+    call("trad %s", "menu_charger"),
+    bouton(134, -116, 100, 32, var("trR"), "charger", COL["sp"], 32),
     # au centre de la barre du bas : le message de sauvegarde s'il y en a un, sinon l'arme équipée
     if_else(gt(var("phaseTimer"), 0), [
         change_var("phaseTimer", -1),
-        if_else(eq(var("infoSauvegarde"), "Code invalide"), [
-            ecrire(var("infoSauvegarde"), 80, -158, 28, 0, 1),
+        call("trad %s", var("infoSauvegarde")),
+        if_else(eq(var("infoSauvegarde"), "msg_charge_bad"), [
+            ecrire(var("trR"), 80, -158, 28, 0, 1),
         ], [
-            ecrire(var("infoSauvegarde"), 80, -158, 28, 67, 1),
+            ecrire(var("trR"), 80, -158, 28, 67, 1),
         ]),
     ], [
-        ecrire(join(item("armeNom", var("P1ArmeOrig")), join(" niv.", item("armeNiveau", var("P1ArmeOrig")))),
+        call("trad %s", item("armeNom", var("P1ArmeOrig"))), set_var("t1", var("trR")),
+        call("trad %s", "niv_short"),
+        ecrire(join(var("t1"), join(" ", join(var("trR"), item("armeNiveau", var("P1ArmeOrig"))))),
                -14, -156, 26, 30, 1),
     ]),
     rect(-240, -150, 480, 40, "#000000", 40),
-    ecrire(join(var("pieces"), " pièces"), -228, -156, 40, 30, 0),
-    if_(eq(var("phaseTimer"), 0), [ecrire(join("Niveau max : ", var("niveauMax")), 228, -156, 40, -1, 2)]),
+    call("trad %s", "menu_pieces"),
+    ecrire(join(var("pieces"), join(" ", var("trR"))), -228, -156, 40, 30, 0),
+    if_(eq(var("phaseTimer"), 0), [
+        call("trad %s", "menu_niveau_max"), set_var("t1", var("trR")),
+        ecrire(join(var("t1"), var("niveauMax")), 228, -156, 40, -1, 2),
+    ]),
+]))
+
+# --- écran LANGUE (affiché au drapeau vert : on choisit français ou anglais)
+# Bilingue par nature : les deux titres s'affichent toujours, le choix se fait au clic.
+# Les drapeaux sont tamponnés au stylo (rect) par-dessus les boutons.
+U.script(define("dessinerLangue", [], [
+    ecrire("CHOISIS TA LANGUE", 0, 130, 54, 30, 1),
+    ecrire("CHOOSE YOUR LANGUAGE", 0, 98, 32, -2, 1),
+    bouton(0, 8, 280, 62, "FRANÇAIS", "langfr", COL["sp"], 50),
+    bouton(0, -68, 280, 62, "ENGLISH", "langen", COL["accent2"], 50),
+    # drapeau français (tricolore) : le bloc rect ne sait tracer que des rectangles
+    # horizontaux, les bandes verticales sont posées au stylo directement
+    # (style 16 de large, bouts ronds : la ligne court de 1 à 15 pour couvrir -7..23)
+    pen_param("transparency", 0),
+    pen_color("#0055A4"), pen_size(16),
+    goto_xy(-110, 1), pen_down(), goto_xy(-110, 15), pen_up(),
+    pen_color("#ffffff"),
+    goto_xy(-94, 1), pen_down(), goto_xy(-94, 15), pen_up(),
+    pen_color("#EF4135"),
+    goto_xy(-78, 1), pen_down(), goto_xy(-78, 15), pen_up(),
+    # drapeau anglais (croix de St-Georges)
+    rect(-118, -68, 48, 30, "#012169", 0),
+    pen_color("#ffffff"), pen_size(10),
+    goto_xy(-94, -78), pen_down(), goto_xy(-94, -58), pen_up(),
+    rect(-118, -68, 48, 10, "#ffffff", 0),
+    pen_color("#C8102E"), pen_size(6),
+    goto_xy(-94, -80), pen_down(), goto_xy(-94, -56), pen_up(),
+    rect(-118, -68, 48, 6, "#C8102E", 0),
+    ecrire("Tout le jeu passera en français", 0, -136, 30, 200, 1),
+    ecrire("The whole game will switch to English", 0, -158, 30, -2, 1),
 ]))
 
 # --- écran COMMANDES
 U.script(define("dessinerCommandes", [], [
     rect(-200, 0, 400, 300, COL["panel"], 15),
-    ecrire("COMMANDES", 0, 105, 80, 30, 1),
-    ecrire("Flèches gauche / droite : se déplacer", 0, 74, 30, -1, 1),
-    ecrire("Double-appui sur une flèche : esquive invulnérable", 0, 52, 28, 30, 1),
-    ecrire("Flèche haut : sauter (on attaque en l'air)", 0, 30, 28, -1, 1),
-    ecrire("Flèche bas : garde (12 % des dégâts, 0 avec le bouclier)", 0, 8, 28, -1, 1),
-    ecrire("U : bouclier 3 s (-70 % des dégâts), puis 5 s de recharge", 0, -14, 28, 100, 1),
-    ecrire("J : poing  K : pied (flèche avec l'arc)  L : SPÉCIAL", 0, -42, 28, 30, 1),
-    ecrire("Boutique : achète, équipe, améliore l'arme jusqu'au niveau 5", 0, -64, 28, 67, 1),
-    ecrire("Atelier : 1 point de talent par niveau, 2 voies par arme,", 0, -86, 28, 67, 1),
-    ecrire("à répartir et à changer quand tu veux.", 0, -108, 28, 67, 1),
-    bouton(0, -150, 160, 40, "RETOUR", "menu", COL["grey"], 42),
+    call("trad %s", "cmd_titre"),
+    ecrire(var("trR"), 0, 105, 80, 30, 1),
+    call("trad %s", "cmd1"),
+    ecrire(var("trR"), 0, 74, 30, -1, 1),
+    call("trad %s", "cmd2"),
+    ecrire(var("trR"), 0, 52, 28, 30, 1),
+    call("trad %s", "cmd3"),
+    ecrire(var("trR"), 0, 30, 28, -1, 1),
+    call("trad %s", "cmd4"),
+    ecrire(var("trR"), 0, 8, 28, -1, 1),
+    call("trad %s", "cmd5"),
+    ecrire(var("trR"), 0, -14, 28, 100, 1),
+    call("trad %s", "cmd6"),
+    ecrire(var("trR"), 0, -42, 28, 30, 1),
+    call("trad %s", "cmd7"),
+    ecrire(var("trR"), 0, -64, 28, 67, 1),
+    call("trad %s", "cmd8"),
+    ecrire(var("trR"), 0, -86, 28, 67, 1),
+    call("trad %s", "cmd9"),
+    ecrire(var("trR"), 0, -108, 28, 67, 1),
+    call("trad %s", "retour"),
+    bouton(0, -150, 160, 40, var("trR"), "menu", COL["grey"], 42),
 ]))
 
 # --- écran SÉLECTION
 sel = [
     rect(-240, 150, 480, 60, "#000000", 55),
-    ecrire("CHOISIS TON ADVERSAIRE", 0, 136, 70, 30, 1),
-    ecrire("Chaque victoire débloque le suivant", 0, 112, 32, -2, 1),
+    call("trad %s", "sel_titre"),
+    ecrire(var("trR"), 0, 136, 70, 30, 1),
+    call("trad %s", "sel_sous"),
+    ecrire(var("trR"), 0, 112, 32, -2, 1),
     set_var("k", 1),
 ]
 sel.append(repeat(len(BOTS), [
@@ -795,11 +1165,12 @@ sel.append(repeat(len(BOTS), [
     if_else(gt(var("k"), var("niveauMax")), [
         bouton(var("bx"), var("by"), 130, 42, join(join(var("k"), ". "), "?????"), "", COL["grey"], 40),
     ], [
+        call("trad %s", item("botNom", var("k"))),
         if_else(eq(var("k"), var("niveauMax")), [
-            bouton(var("bx"), var("by"), 130, 42, join(join(var("k"), ". "), item("botNom", var("k"))),
+            bouton(var("bx"), var("by"), 130, 42, join(join(var("k"), ". "), var("trR")),
                    join("lvl", var("k")), COL["accent"], 40),
         ], [
-            bouton(var("bx"), var("by"), 130, 42, join(join(var("k"), ". "), item("botNom", var("k"))),
+            bouton(var("bx"), var("by"), 130, 42, join(join(var("k"), ". "), var("trR")),
                    join("lvl", var("k")), COL["ok"], 40),
         ]),
     ]),
@@ -808,91 +1179,119 @@ sel.append(repeat(len(BOTS), [
 sel += [
     rect(100, -30, 130, 210, "#000000", 50),
     if_else(gt(var("niveauApercu"), 0), [
-        ecrire(item("botNom", var("niveauApercu")), 165, 55, 44, 30, 1),
-        ecrire(join("PV : ", item("botPV", var("niveauApercu"))), 165, -112, 30, -1, 1),
-        ecrire(join("Arène : ", item("botAreneNom", var("niveauApercu"))), 165, -128, 26, -2, 1),
+        call("trad %s", item("botNom", var("niveauApercu"))),
+        ecrire(var("trR"), 165, 55, 44, 30, 1),
+        call("trad %s", "sel_pv"),
+        ecrire(join(var("trR"), item("botPV", var("niveauApercu"))), 165, -112, 30, -1, 1),
+        call("trad %s", "sel_arene"), set_var("t1", var("trR")),
+        call("trad %s", item("botAreneNom", var("niveauApercu"))),
+        ecrire(join(var("t1"), var("trR")), 165, -128, 26, -2, 1),
     ], [
-        ecrire("Survole un", 165, 0, 36, -2, 1),
-        ecrire("adversaire", 165, -20, 36, -2, 1),
+        call("trad %s", "sel_survole1"),
+        ecrire(var("trR"), 165, 0, 36, -2, 1),
+        call("trad %s", "sel_survole2"),
+        ecrire(var("trR"), 165, -20, 36, -2, 1),
     ]),
-    bouton(-60, -150, 160, 40, "RETOUR", "menu", COL["grey"], 42),
+    call("trad %s", "retour"),
+    bouton(-60, -150, 160, 40, var("trR"), "menu", COL["grey"], 42),
 ]
 U.script(define("dessinerSelection", [], sel))
 
 # --- écran BOUTIQUE
 shop = [
     rect(-240, 150, 480, 60, "#000000", 55),
-    ecrire("BOUTIQUE", 0, 152, 64, 178, 1),
-    ecrire(join(var("pieces"), " pièces"), 225, 138, 40, 30, 2),
-    ecrire("Accessoires", 80, 100, 40, -2, 1),
+    call("trad %s", "shop_titre"),
+    ecrire(var("trR"), 0, 152, 64, 178, 1),
+    call("trad %s", "menu_pieces"),
+    ecrire(join(var("pieces"), join(" ", var("trR"))), 225, 138, 40, 30, 2),
+    call("trad %s", "shop_acc"),
+    ecrire(var("trR"), 80, 100, 40, -2, 1),
     set_var("k", 1),
 ]
 shop.append(repeat(len(ACCS), [
     set_var("bx", add(-15, mul(mod(sub(var("k"), 1), 3), 95))),
     set_var("by", sub(72, mul(floor(div(sub(var("k"), 1), 3)), 44))),
+    call("trad %s", item("accNom", var("k"))), set_var("t1", var("trR")),
     if_else(eq(item("accPossede", var("k")), 1), [
         if_else(eq(item("accId", var("k")), var("P1Acc")), [
-            bouton(var("bx"), var("by"), 92, 36, item("accNom", var("k")), join("acc", var("k")), COL["ok"], 34),
+            bouton(var("bx"), var("by"), 92, 36, var("t1"), join("acc", var("k")), COL["ok"], 34),
         ], [
-            bouton(var("bx"), var("by"), 92, 36, item("accNom", var("k")), join("acc", var("k")), COL["accent2"], 34),
+            bouton(var("bx"), var("by"), 92, 36, var("t1"), join("acc", var("k")), COL["accent2"], 34),
         ]),
     ], [
-        bouton(var("bx"), var("by"), 92, 36, join(item("accNom", var("k")), join(" ", item("accPrix", var("k")))),
+        bouton(var("bx"), var("by"), 92, 36, join(var("t1"), join(" ", item("accPrix", var("k")))),
                join("acc", var("k")), COL["grey"], 30),
     ]),
     change_var("k", 1),
 ]))
 shop += [
-    ecrire("Couleurs", 80, -72, 40, -2, 1),
+    call("trad %s", "shop_couleurs"),
+    ecrire(var("trR"), 80, -72, 40, -2, 1),
     set_var("k", 1),
     repeat(len(SKINS), [
         set_var("bx", add(-45, mul(sub(var("k"), 1), 50))),
         set_var("by", -100),
+        call("trad %s", item("skinNom", var("k"))), set_var("t1", var("trR")),
         if_else(eq(item("skinPossede", var("k")), 1), [
             if_else(eq(var("k"), var("P1Skin")), [
-                bouton(var("bx"), var("by"), 46, 34, item("skinNom", var("k")), join("skin", var("k")), COL["ok"], 26),
+                bouton(var("bx"), var("by"), 46, 34, var("t1"), join("skin", var("k")), COL["ok"], 26),
             ], [
-                bouton(var("bx"), var("by"), 46, 34, item("skinNom", var("k")), join("skin", var("k")), COL["accent2"], 26),
+                bouton(var("bx"), var("by"), 46, 34, var("t1"), join("skin", var("k")), COL["accent2"], 26),
             ]),
         ], [
             bouton(var("bx"), var("by"), 46, 34, item("skinPrix", var("k")), join("skin", var("k")), COL["grey"], 26),
         ]),
         change_var("k", 1),
     ]),
-    ecrire("Clique pour acheter puis pour équiper", 80, -126, 28, -2, 1),
-    bouton(-150, -150, 150, 40, "RETOUR", "menu", COL["grey"], 42),
-    ecrire("Aperçu", -150, 58, 34, -2, 1),
+    call("trad %s", "shop_acheter"),
+    ecrire(var("trR"), 80, -126, 28, -2, 1),
+    call("trad %s", "retour"),
+    bouton(-150, -150, 150, 40, var("trR"), "menu", COL["grey"], 42),
+    call("trad %s", "shop_apercu"),
+    ecrire(var("trR"), -150, 58, 34, -2, 1),
     # onglets
-    bouton(-180, 100, 84, 30, "LOOK", "tab1", COL["ok"], 26),
-    bouton(-90, 100, 84, 30, "ARMES", "tab2", COL["grey"], 26),
-    bouton(0, 100, 84, 30, "TALENTS", "tab3", COL["grey"], 26),
+    call("trad %s", "tab_look"),
+    bouton(-180, 100, 84, 30, var("trR"), "tab1", COL["ok"], 26),
+    call("trad %s", "tab_armes"),
+    bouton(-90, 100, 84, 30, var("trR"), "tab2", COL["grey"], 26),
+    call("trad %s", "tab_talents"),
+    bouton(0, 100, 84, 30, var("trR"), "tab3", COL["grey"], 26),
 ]
 U.script(define("dessinerBoutique", [], shop))
 
 # ---------- page 2 : les armes (achat, équipement, amélioration niveau 1..5)
 armes_shop = [
     rect(-240, 150, 480, 60, "#000000", 55),
-    ecrire("ARMES", 0, 152, 64, 30, 1),
-    ecrire(join(var("pieces"), " pièces"), 228, 152, 34, 30, 2),
-    bouton(-180, 100, 84, 30, "LOOK", "tab1", COL["grey"], 26),
-    bouton(-90, 100, 84, 30, "ARMES", "tab2", COL["ok"], 26),
-    bouton(0, 100, 84, 30, "TALENTS", "tab3", COL["grey"], 26),
+    call("trad %s", "armes_titre"),
+    ecrire(var("trR"), 0, 152, 64, 30, 1),
+    call("trad %s", "menu_pieces"),
+    ecrire(join(var("pieces"), join(" ", var("trR"))), 228, 152, 34, 30, 2),
+    call("trad %s", "tab_look"),
+    bouton(-180, 100, 84, 30, var("trR"), "tab1", COL["grey"], 26),
+    call("trad %s", "tab_armes"),
+    bouton(-90, 100, 84, 30, var("trR"), "tab2", COL["ok"], 26),
+    call("trad %s", "tab_talents"),
+    bouton(0, 100, 84, 30, var("trR"), "tab3", COL["grey"], 26),
     # 6 armes en 3 x 2 ; le niveau est écrit dans le bouton des armes possédées
     set_var("k", 1),
 ]
 armes_shop.append(repeat(len(ARMES), [
     set_var("bx", add(-160, mul(mod(sub(var("k"), 1), 3), 160))),
     set_var("by", sub(70, mul(floor(div(sub(var("k"), 1), 3)), 37))),
+    call("trad %s", item("armeNom", var("k"))), set_var("t1", var("trR")),
+    call("trad %s", "niv_short"),
     if_else(eq(item("armePossede", var("k")), 1), [
         if_else(eq(var("k"), var("P1Arme")), [
-            bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" niv.", item("armeNiveau", var("k")))),
+            bouton(var("bx"), var("by"), 150, 32,
+                   join(var("t1"), join(" ", join(var("trR"), item("armeNiveau", var("k"))))),
                    join("arme", var("k")), COL["ok"], 28),
         ], [
-            bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" niv.", item("armeNiveau", var("k")))),
+            bouton(var("bx"), var("by"), 150, 32,
+                   join(var("t1"), join(" ", join(var("trR"), item("armeNiveau", var("k"))))),
                    join("arme", var("k")), COL["accent2"], 28),
         ]),
     ], [
-        bouton(var("bx"), var("by"), 150, 32, join(item("armeNom", var("k")), join(" ", item("armePrix", var("k")))),
+        bouton(var("bx"), var("by"), 150, 32, join(var("t1"), join(" ", item("armePrix", var("k")))),
                join("arme", var("k")), COL["grey"], 28),
     ]),
     change_var("k", 1),
@@ -902,31 +1301,48 @@ armes_shop += [
     rect(-235, -63, 470, 142, COL["panel"], 12),
     *icone_arme(var("armeApercu"), -205, -30, 40),
     call("apercuArme %s", var("armeApercu")),
-    ecrire(join(item("armeNom", var("armeApercu")), join("   Niv. ", join(item("armeNiveau", var("armeApercu")), "/5"))),
+    call("trad %s", item("armeNom", var("armeApercu"))), set_var("t1", var("trR")),
+    call("trad %s", "niv_long"), set_var("t2", var("trR")),
+    ecrire(join(var("t1"), join("   ", join(join(var("t2"), " "),
+            join(item("armeNiveau", var("armeApercu")), "/5")))),
            -150, -6, 30, 30, 0),
     ecrire(var("sA"), -150, -34, 22, -1, 0),
     ecrire(var("sB"), -150, -56, 22, -1, 0),
-    ecrire(join(item("armeL1", var("armeApercu")), join(" ", item("armeL3", var("armeApercu")))),
+    call("trad %s", item("armeL1", var("armeApercu"))), set_var("t1", var("trR")),
+    call("trad %s", item("armeL3", var("armeApercu"))),
+    ecrire(join(var("t1"), join(" ", var("trR"))),
            -150, -80, 21, -2, 0),
     if_else(and_(eq(item("armePossede", var("armeApercu")), 1), lt(item("armeNiveau", var("armeApercu")), ARME_NIVEAU_MAX)), [
-        bouton(60, -106, 340, 28, join("AMÉLIORER   ", join(var("cout"), " pièces")), "upg", COL["warn"], 24),
+        call("trad %s", "ameliore"), set_var("t1", var("trR")),
+        call("trad %s", "menu_pieces"),
+        bouton(60, -106, 340, 28,
+               join(var("t1"), join("   ", join(var("cout"), join(" ", var("trR"))))),
+               "upg", COL["warn"], 24),
     ], [
         if_else(eq(item("armePossede", var("armeApercu")), 1), [
-            ecrire("NIVEAU MAX", 60, -106, 24, 67, 1),
+            call("trad %s", "niveau_max"),
+            ecrire(var("trR"), 60, -106, 24, 67, 1),
         ], [
-            ecrire(join("Achat : ", join(item("armePrix", var("armeApercu")), " pièces")), 60, -106, 24, -2, 1),
+            call("trad %s", "achat"), set_var("t1", var("trR")),
+            call("trad %s", "menu_pieces"),
+            ecrire(join(var("t1"), join(item("armePrix", var("armeApercu")), join(" ", var("trR")))),
+                   60, -106, 24, -2, 1),
         ]),
     ]),
     if_else(eq(var("P1Arme"), var("armeApercu")), [
-        ecrire("ÉQUIPÉE", 60, -130, 21, 67, 1),
+        call("trad %s", "equipee"),
+        ecrire(var("trR"), 60, -130, 21, 67, 1),
     ], [
         if_else(eq(item("armePossede", var("armeApercu")), 1), [
-            ecrire("Achetée : cliquer pour équiper", 60, -130, 21, 100, 1),
+            call("trad %s", "achetee_eq"),
+            ecrire(var("trR"), 60, -130, 21, 100, 1),
         ], [
-            ecrire("Cliquer sur l'arme pour l'acheter", 60, -130, 21, -2, 1),
+            call("trad %s", "cliquer_acheter"),
+            ecrire(var("trR"), 60, -130, 21, -2, 1),
         ]),
     ]),
-    bouton(-150, -150, 150, 40, "RETOUR", "menu", COL["grey"], 42),
+    call("trad %s", "retour"),
+    bouton(-150, -150, 150, 40, var("trR"), "menu", COL["grey"], 42),
 ]
 U.script(define("dessinerBoutiqueArmes", [], armes_shop))
 
@@ -934,19 +1350,25 @@ U.script(define("dessinerBoutiqueArmes", [], armes_shop))
 # ---------- page 3 : l'atelier (arbre de talents par arme)
 talents_shop = [
     rect(-240, 150, 480, 60, "#000000", 55),
-    ecrire("ATELIER", 0, 152, 64, 67, 1),
-    ecrire(join(var("pieces"), " pièces"), 228, 152, 34, 30, 2),
-    bouton(-180, 100, 84, 30, "LOOK", "tab1", COL["grey"], 26),
-    bouton(-90, 100, 84, 30, "ARMES", "tab2", COL["grey"], 26),
-    bouton(0, 100, 84, 30, "TALENTS", "tab3", COL["ok"], 26),
+    call("trad %s", "atelier"),
+    ecrire(var("trR"), 0, 152, 64, 67, 1),
+    call("trad %s", "menu_pieces"),
+    ecrire(join(var("pieces"), join(" ", var("trR"))), 228, 152, 34, 30, 2),
+    call("trad %s", "tab_look"),
+    bouton(-180, 100, 84, 30, var("trR"), "tab1", COL["grey"], 26),
+    call("trad %s", "tab_armes"),
+    bouton(-90, 100, 84, 30, var("trR"), "tab2", COL["grey"], 26),
+    call("trad %s", "tab_talents"),
+    bouton(0, 100, 84, 30, var("trR"), "tab3", COL["ok"], 26),
     # sélection de l'arme (1 par niveau au-dessus de 1)
     set_var("k", 1),
     repeat(len(ARMES), [
         set_var("bx", add(-190, mul(sub(var("k"), 1), 76))),
+        call("trad %s", item("armeNom", var("k"))),
         if_else(eq(var("k"), var("armeApercu")), [
-            bouton(var("bx"), 62, 72, 26, item("armeNom", var("k")), join("talw", var("k")), COL["ok"], 20),
+            bouton(var("bx"), 62, 72, 26, var("trR"), join("talw", var("k")), COL["ok"], 20),
         ], [
-            bouton(var("bx"), 62, 72, 26, item("armeNom", var("k")), join("talw", var("k")), COL["grey"], 20),
+            bouton(var("bx"), 62, 72, 26, var("trR"), join("talw", var("k")), COL["grey"], 20),
         ]),
         change_var("k", 1),
     ]),
@@ -957,22 +1379,36 @@ talents_shop = [
     if_(lt(var("talPtsRestants"), 0), [set_var("talPtsRestants", 0)]),
     rect(-235, -58, 470, 152, COL["panel"], 14),
     *icone_arme(var("armeApercu"), -205, -10, 36),
-    ecrire(join(item("armeNom", var("armeApercu")), join("   Niv. ", item("armeNiveau", var("armeApercu")))),
+    call("trad %s", item("armeNom", var("armeApercu"))), set_var("t1", var("trR")),
+    call("trad %s", "niv_long"), set_var("t2", var("trR")),
+    ecrire(join(var("t1"), join("   ", join(join(var("t2"), " "), item("armeNiveau", var("armeApercu"))))),
            -178, 2, 28, 30, 0),
-    ecrire(join(join("Points à placer : ", var("talPtsRestants")), join(join(" / ", var("talTotal")),
-           "   (1 par niveau, modifiable)")), -178, -20, 22, 30, 0),
+    call("trad %s", "points_placer"), set_var("t1", var("trR")),
+    call("trad %s", "points_info"), set_var("t2", var("trR")),
+    ecrire(join(var("t1"), join(var("talPtsRestants"), join(join(" / ", var("talTotal")), join("   ", var("t2"))))),
+           -178, -20, 22, 30, 0),
     # voie A
-    ecrire(join("VOIE A   ", item("talNomA", var("armeApercu"))), -215, -44, 24, 100, 0),
-    ecrire(join("investi : ", join(item("talPts", sub(mul(var("armeApercu"), 2), 1)), "")), -215, -64, 20, -1, 0),
-    ecrire(item("talTxtA", var("armeApercu")), -90, -64, 20, -2, 0),
+    call("trad %s", "voie_a"), set_var("t1", var("trR")),
+    call("trad %s", item("talNomA", var("armeApercu"))),
+    ecrire(join(var("t1"), join("   ", var("trR"))), -215, -44, 24, 100, 0),
+    call("trad %s", "investi"), set_var("t1", var("trR")),
+    ecrire(join(var("t1"), join(item("talPts", sub(mul(var("armeApercu"), 2), 1)), "")), -215, -64, 20, -1, 0),
+    call("trad %s", item("talTxtA", var("armeApercu"))),
+    ecrire(var("trR"), -90, -64, 20, -2, 0),
     bouton(150, -40, 70, 26, "+1", "talA", COL["accent"], 28),
     # voie B
-    ecrire(join("VOIE B   ", item("talNomB", var("armeApercu"))), -215, -88, 24, 30, 0),
-    ecrire(join("investi : ", join(item("talPts", mul(var("armeApercu"), 2)), "")), -215, -108, 20, -1, 0),
-    ecrire(item("talTxtB", var("armeApercu")), -90, -108, 20, -2, 0),
+    call("trad %s", "voie_b"), set_var("t1", var("trR")),
+    call("trad %s", item("talNomB", var("armeApercu"))),
+    ecrire(join(var("t1"), join("   ", var("trR"))), -215, -88, 24, 30, 0),
+    call("trad %s", "investi"), set_var("t1", var("trR")),
+    ecrire(join(var("t1"), join(item("talPts", mul(var("armeApercu"), 2)), "")), -215, -108, 20, -1, 0),
+    call("trad %s", item("talTxtB", var("armeApercu"))),
+    ecrire(var("trR"), -90, -108, 20, -2, 0),
     bouton(150, -84, 70, 26, "+1", "talB", COL["accent"], 28),
-    bouton(150, -120, 70, 24, "EFFACER", "talR", COL["grey"], 20),
-    bouton(-150, -158, 150, 36, "RETOUR", "menu", COL["grey"], 42),
+    call("trad %s", "effacer"),
+    bouton(150, -120, 70, 24, var("trR"), "talR", COL["grey"], 20),
+    call("trad %s", "retour"),
+    bouton(-150, -158, 150, 36, var("trR"), "menu", COL["grey"], 42),
 ]
 U.script(define("dessinerTalents", [], talents_shop))
 
@@ -984,7 +1420,8 @@ hud = [
     # barres spéciales
     barre(-230, 132, 120, 7, div(var("P1Special"), 100), COL["sp"], -1),
     barre(110, 132, 120, 7, div(var("BotSpecial"), 100), COL["sp"], 1),
-    ecrire("TOI", -228, 158, 30, -1, 0),
+    call("trad %s", "hud_toi"),
+    ecrire(var("trR"), -228, 158, 30, -1, 0),
     ecrire(var("BotNom"), 228, 158, 30, -1, 2),
     # chrono
     rect(-30, 150, 60, 34, COL["panel"], 0),
@@ -999,10 +1436,12 @@ hud = [
         change_var("k", 1),
     ]),
     if_(and_(eq(var("P1Special"), 100), lt(mod(var("frame"), 20), 10)), [
-        ecrire("SPÉCIAL PRÊT (L)", -228, 94, 26, 100, 0),
+        call("trad %s", "hud_special"),
+        ecrire(var("trR"), -228, 94, 26, 100, 0),
     ]),
     # bouclier personnel (touche U) : vert tant qu'il protège, sinon la recharge se remplit
-    ecrire("BOUCLIER (U)", -228, 126, 22, 100, 0),
+    call("trad %s", "hud_bouclier"),
+    ecrire(var("trR"), -228, 126, 22, 100, 0),
     if_else(gt(var("P1BulleT"), 0),
             [barre(-112, 112, 82, 8, 1, COL["hp"], -1)],
             [barre(-112, 112, 82, 8, div(sub(BULLE_CD, var("P1BulleCd")), BULLE_CD), COL["sp"], -1)]),
@@ -1010,21 +1449,32 @@ hud = [
     rect(-238, -171, 476, 36, "#000000", 55),
     rect(-238, -189, 476, 2, COL["grey"], 0),
     *icone_arme(var("P1ArmeMain"), -212, -170, 30),
-    ecrire(join("TOI : ", join(item("armeNom", var("P1ArmeMain")), join(" niv.", item("armeNiveau", var("P1ArmeMain"))))),
+    call("trad %s", "hud_toi"), set_var("t1", var("trR")),
+    call("trad %s", item("armeNom", var("P1ArmeMain"))), set_var("t2", var("trR")),
+    call("trad %s", "niv_short"), set_var("t3", var("trR")),
+    ecrire(join(var("t1"), join(" : ", join(var("t2"),
+           join(" ", join(var("t3"), item("armeNiveau", var("P1ArmeMain"))))))),
            -180, -176, 28, -1, 0),
-    if_(eq(item("armeProj", var("P1ArmeMain")), 1), [ecrire("K : tir / L : salve", -180, -160, 22, 100, 0)]),
-    ecrire(join(var("BotNom"), join(" : ", join(item("armeNom", var("BotArmeMain")),
-           join(" niv.", item("botArmeNiv", var("niveau")))))), 180, -176, 28, -1, 2),
+    if_(eq(item("armeProj", var("P1ArmeMain")), 1), [
+        call("trad %s", "hud_k_salve"),
+        ecrire(var("trR"), -180, -160, 22, 100, 0),
+    ]),
+    call("trad %s", item("armeNom", var("BotArmeMain"))), set_var("t2", var("trR")),
+    call("trad %s", "niv_short"), set_var("t3", var("trR")),
+    ecrire(join(var("BotNom"), join(" : ", join(var("t2"),
+           join(" ", join(var("t3"), item("botArmeNiv", var("niveau"))))))), 180, -176, 28, -1, 2),
     *icone_arme(var("BotArmeMain"), 212, -170, 30),
     if_(gt(var("comboP1"), 1), [
-        ecrire(join(var("comboP1"), " HITS !"), -228, 80, 44, 30, 0),
+        call("trad %s", "hud_hits"),
+        ecrire(join(var("comboP1"), join(" ", var("trR"))), -228, 80, 44, 30, 0),
     ]),
     if_(not_(eq(var("message"), "")), [
         ecrire(var("message"), 3, 27, 90, -3, 1),
         ecrire(var("message"), 0, 30, 90, 30, 1),
     ]),
     if_(and_(eq(var("phase"), "intro"), eq(var("round"), 1)), [
-        ecrire("Double-appui : esquive   U : bouclier   Flèches : bouger / sauter / garde   J/K/L : attaques", 0, -160, 26, -2, 1),
+        call("trad %s", "hud_intro"),
+        ecrire(var("trR"), 0, -160, 26, -2, 1),
     ]),
     if_(gt(var("flash"), 0), [
         rect(-260, 0, 520, 400, "#ffffff", sub(100, mul(var("flash"), 12))),
@@ -1038,23 +1488,36 @@ res = [
     rect(-260, 0, 520, 400, "#000000", 45),
     rect(-170, 20, 340, 200, COL["panel"], 10),
     if_else(eq(var("resultat"), "victoire"), [
-        ecrire("VICTOIRE !", 3, 77, 110, -3, 1),
-        ecrire("VICTOIRE !", 0, 80, 110, 30, 1),
-        ecrire(join(join("Tu as battu ", var("BotNom")), " !"), 0, 45, 40, -1, 1),
+        call("trad %s", "res_victoire"),
+        ecrire(var("trR"), 3, 77, 110, -3, 1),
+        ecrire(var("trR"), 0, 80, 110, 30, 1),
+        call("trad %s", "res_battu"), set_var("t1", var("trR")),
+        call("trad %s", "res_battu2"),
+        ecrire(join(var("t1"), join(var("BotNom"), var("trR"))), 0, 45, 40, -1, 1),
     ], [
-        ecrire("DÉFAITE", 3, 77, 110, -3, 1),
-        ecrire("DÉFAITE", 0, 80, 110, 0, 1),
-        ecrire(join(var("BotNom"), " était trop fort..."), 0, 45, 40, -1, 1),
+        call("trad %s", "res_defaite"),
+        ecrire(var("trR"), 3, 77, 110, -3, 1),
+        ecrire(var("trR"), 0, 80, 110, 0, 1),
+        call("trad %s", "res_tropfort"),
+        ecrire(join(var("BotNom"), var("trR")), 0, 45, 40, -1, 1),
     ]),
-    ecrire(join(join("+ ", var("gain")), " pièces"), 0, 10, 60, 30, 1),
-    if_(eq(var("dernierNiveauGagne"), 1), [ecrire("Nouvel adversaire débloqué !", 0, -20, 36, 67, 1)]),
-    bouton(-105, -60, 130, 40, "REJOUER", "rejouer", COL["accent2"], 40),
+    call("trad %s", "menu_pieces"),
+    ecrire(join(join("+ ", var("gain")), join(" ", var("trR"))), 0, 10, 60, 30, 1),
+    if_(eq(var("dernierNiveauGagne"), 1), [
+        call("trad %s", "res_debloque"),
+        ecrire(var("trR"), 0, -20, 36, 67, 1),
+    ]),
+    call("trad %s", "res_rejouer"),
+    bouton(-105, -60, 130, 40, var("trR"), "rejouer", COL["accent2"], 40),
     if_else(and_(eq(var("resultat"), "victoire"), lt(var("niveau"), len(BOTS))), [
-        bouton(35, -60, 130, 40, "SUIVANT", "suivant", COL["accent"], 40),
+        call("trad %s", "res_suivant"),
+        bouton(35, -60, 130, 40, var("trR"), "suivant", COL["accent"], 40),
     ], [
-        bouton(35, -60, 130, 40, "BOUTIQUE", "boutique", COL["accent"], 40),
+        call("trad %s", "menu_boutique"),
+        bouton(35, -60, 130, 40, var("trR"), "boutique", COL["accent"], 40),
     ]),
-    bouton(-35, -110, 130, 40, "MENU", "menu", COL["grey"], 40),
+    call("trad %s", "menu_menu"),
+    bouton(-35, -110, 130, 40, var("trR"), "menu", COL["grey"], 40),
 ]
 U.script(define("dessinerResultat", [], res))
 
@@ -1063,14 +1526,16 @@ U.script(define("nouveauRound", [], [
     set_var("P1Special", 0), set_var("BotSpecial", 0), set_var("P1Hit", 0), set_var("BotHit", 0),
     set_var("chrono", ROUND_SECONDS * FPS), set_var("comboP1", 0), set_var("hitStop", 0),
     set_var("phase", "intro"), set_var("phaseTimer", 45),
-    set_var("message", join("ROUND ", var("round"))),
+    call("trad %s", "round"),
+    set_var("message", join(join(var("trR"), " "), var("round"))),
     play_sound("round"),
     broadcast("resetRound"),
 ]))
 
 # --- lancer un combat (niveau courant)
 U.script(define("lancerCombat", [], [
-    set_var("BotNom", item("botNom", var("niveau"))),
+    call("trad %s", item("botNom", var("niveau"))),
+    set_var("BotNom", var("trR")),
     set_var("BotTeinte", item("botTeinte", var("niveau"))),
     set_var("BotLum", item("botLum", var("niveau"))),
     set_var("BotMax", item("botPV", var("niveau"))),
@@ -1091,6 +1556,13 @@ U.script(define("lancerCombat", [], [
 
 # --- gestion des clics
 click_logic = [
+    # choix de la langue (écran affiché au drapeau vert)
+    if_(eq(var("clic"), "langfr"), [
+        set_var("langue", "fr"), play_sound("coin"), set_var("scene", "menu"),
+    ]),
+    if_(eq(var("clic"), "langen"), [
+        set_var("langue", "en"), play_sound("coin"), set_var("scene", "menu"),
+    ]),
     if_(eq(var("clic"), "jouer"), [set_var("scene", "select"), set_var("niveauApercu", 0)]),
     if_(eq(var("clic"), "boutique"), [set_var("scene", "shop"), set_var("P1Arme", var("P1ArmeOrig")), set_var("armeApercu", var("P1Arme"))]),
     if_(eq(var("clic"), "tab1"), [set_var("shopPage", 1)]),
@@ -1101,7 +1573,8 @@ click_logic = [
         Blk("data_showlist", fields={"LIST": ListRef("CODE DE SAUVEGARDE")}),
     ]),
     if_(eq(var("clic"), "charger"), [
-        Blk("sensing_askandwait", {"QUESTION": "Colle ton code de sauvegarde puis appuie sur Entrée :"}),
+        call("trad %s", "ask_code"),
+        Blk("sensing_askandwait", {"QUESTION": var("trR")}),
         call("chargerCode %s", Blk("sensing_answer")),
     ]),
     if_(eq(var("clic"), "menu"), [
@@ -1129,7 +1602,8 @@ click_logic = [
                 set_var("P1Acc", item("accId", var("k"))),
                 play_sound("coin"),
             ], [
-                set_var("message", "Pas assez de pièces !"), set_var("phaseTimer", 40),
+                call("trad %s", "msg_piece"),
+                set_var("message", var("trR")), set_var("phaseTimer", 40),
             ]),
         ]),
     ]),
@@ -1145,7 +1619,8 @@ click_logic = [
                 set_var("P1Skin", var("k")),
                 play_sound("coin"),
             ], [
-                set_var("message", "Pas assez de pièces !"), set_var("phaseTimer", 40),
+                call("trad %s", "msg_piece"),
+                set_var("message", var("trR")), set_var("phaseTimer", 40),
             ]),
         ]),
         set_var("P1Teinte", item("skinTeinte", var("P1Skin"))),
@@ -1163,7 +1638,8 @@ click_logic = [
                 set_var("P1Arme", var("k")), set_var("P1ArmeOrig", var("k")), set_var("armeApercu", var("k")),
                 play_sound("coin"),
             ], [
-                set_var("message", "Pas assez de pièces !"), set_var("phaseTimer", 40),
+                call("trad %s", "msg_piece"),
+                set_var("message", var("trR")), set_var("phaseTimer", 40),
             ]),
         ]),
     ]),
@@ -1177,7 +1653,8 @@ click_logic = [
         set_var("talTotal", sub(item("armeNiveau", var("k")), 1)),
         set_var("talDepense", add(item("talPts", sub(mul(var("k"), 2), 1)), item("talPts", mul(var("k"), 2)))),
         if_else(ge(var("talDepense"), var("talTotal")), [
-            set_var("message", "Plus de points : améliore l'arme !"), set_var("phaseTimer", 40),
+            call("trad %s", "msg_points"),
+                    set_var("message", var("trR")), set_var("phaseTimer", 40),
         ], [
             if_(eq(var("clic"), "talA"), [
                 set_var("i", sub(mul(var("k"), 2), 1)),
@@ -1191,7 +1668,8 @@ click_logic = [
         set_var("k", var("armeApercu")),
         list_replace("talPts", sub(mul(var("k"), 2), 1), 0),
         list_replace("talPts", mul(var("k"), 2), 0),
-        play_sound("click"), set_var("message", "Points rendus !"), set_var("phaseTimer", 40),
+        play_sound("click"),
+        call("trad %s", "msg_points_ok"), set_var("message", var("trR")), set_var("phaseTimer", 40),
     ]),
     if_(eq(var("clic"), "tab3"), [set_var("shopPage", 3), set_var("armeApercu", var("P1Arme"))]),
     # amélioration de l'arme affichée (niveau 1 -> 5, coût = prixUpg x niveau courant)
@@ -1213,9 +1691,12 @@ click_logic = [
                 play_sound("coin"),
                 set_var("fxType", "ring"), set_var("fxX", 60), set_var("fxY", -100), create_clone("FX"),
             ], [
-                set_var("message", "Pas assez de pièces !"), set_var("phaseTimer", 40),
+                call("trad %s", "msg_piece"),
+                set_var("message", var("trR")), set_var("phaseTimer", 40),
             ]),
-        ], [set_var("message", "Niveau maximum !"), set_var("phaseTimer", 40)]),
+        ], [
+            call("trad %s", "msg_max"),
+            set_var("message", var("trR")), set_var("phaseTimer", 40)]),
     ]),
 ]
 U.script(define("gererClic", [], click_logic))
@@ -1226,7 +1707,8 @@ round_logic = [
     if_(eq(var("phase"), "intro"), [
         change_var("phaseTimer", -1),
         if_(eq(var("phaseTimer"), 0), [
-            set_var("message", "FIGHT !"), set_var("phase", "fight"), set_var("phaseTimer", 20),
+            call("trad %s", "fight"),
+            set_var("message", var("trR")), set_var("phase", "fight"), set_var("phaseTimer", 20),
         ]),
     ]),
     if_(eq(var("phase"), "fight"), [
@@ -1237,7 +1719,9 @@ round_logic = [
         if_(eq(var("hitStop"), 0), [change_var("chrono", -1)]),
         if_(or_(or_(lt(var("P1HP"), 1), lt(var("BotHP"), 1)), lt(var("chrono"), 1)), [
             set_var("phase", "fin"), set_var("phaseTimer", 75), set_var("flash", 8),
-            if_else(lt(var("chrono"), 1), [set_var("message", "TEMPS !")], [set_var("message", "K.O. !"), play_sound("ko")]),
+            call("trad %s", "temps"), set_var("t1", var("trR")),
+            call("trad %s", "ko"),
+            if_else(lt(var("chrono"), 1), [set_var("message", var("t1"))], [set_var("message", var("trR")), play_sound("ko")]),
             if_else(gt(var("P1HP"), var("BotHP")), [
                 change_var("victoiresP1", 1), set_var("P1State", "win"), set_var("BotState", "ko"),
             ], [
@@ -1252,9 +1736,12 @@ round_logic = [
     if_(eq(var("phase"), "fin"), [
         change_var("phaseTimer", -1),
         if_(eq(var("phaseTimer"), 40), [
-            if_(gt(var("victoiresP1"), var("victoiresBot")), [set_var("message", "Round pour toi !")]),
-            if_(lt(var("victoiresP1"), var("victoiresBot")), [set_var("message", join("Round pour ", var("BotNom")))]),
-            if_(eq(var("victoiresP1"), var("victoiresBot")), [set_var("message", "Égalité")]),
+            call("trad %s", "round_toi"), set_var("t1", var("trR")),
+            call("trad %s", "round_bot"), set_var("t2", var("trR")),
+            call("trad %s", "egalite"),
+            if_(gt(var("victoiresP1"), var("victoiresBot")), [set_var("message", var("t1"))]),
+            if_(lt(var("victoiresP1"), var("victoiresBot")), [set_var("message", join(join(var("t2"), " "), var("BotNom")))]),
+            if_(eq(var("victoiresP1"), var("victoiresBot")), [set_var("message", var("trR"))]),
         ]),
         if_(eq(var("phaseTimer"), 0), [
             if_else(or_(gt(var("victoiresP1"), 1), gt(var("victoiresBot"), 1)), [
@@ -1284,7 +1771,7 @@ U.script(define("logiqueRound", [], round_logic))
 U.script(
     when_flag(),
     hide(),
-    set_var("scene", "menu"),
+    set_var("scene", "langue"),  # au drapeau vert : d'abord le choix français / anglais
     set_var("message", ""),
     set_var("hoverBtn", ""), set_var("clic", ""), set_var("sourisAvant", 1), set_var("frame", 0),
     set_var("niveauApercu", 0),
@@ -1298,6 +1785,7 @@ U.script(
         change_var("frame", 1),
         pen_clear(),
         set_var("hoverBtn", ""),
+        if_(eq(var("scene"), "langue"), [call("dessinerLangue")]),
         if_(eq(var("scene"), "menu"), [call("dessinerMenu")]),
         if_(eq(var("scene"), "commandes"), [call("dessinerCommandes")]),
         if_(eq(var("scene"), "save"), [call("dessinerSauvegarde")]),
@@ -1847,6 +2335,7 @@ def fighter_scripts(t, me, op, is_player):
                 # page ARMES : le panneau d'aperçu montre l'arme, on masque le combattant
                 if_(and_(eq(var("scene"), "shop"), gt(var("shopPage"), 1)), [hide(), setV("Vis", 0)]),
             ], [
+                if_(eq(var("scene"), "langue"), [hide(), setV("Vis", 0)]),
                 if_(eq(var("scene"), "select"), [hide(), setV("Vis", 0)]),
                 if_(eq(var("scene"), "commandes"), [hide(), setV("Vis", 0)]),
                 if_(eq(var("scene"), "save"), [hide(), setV("Vis", 0)]),

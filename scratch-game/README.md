@@ -13,9 +13,25 @@ avec des graphismes 100 % vectoriels, dessinés procéduralement.
 1. Télécharge **[`dist/ArenaClash.sb3`](dist/ArenaClash.sb3)**.
 2. Va sur <https://scratch.mit.edu/projects/editor/> (ou ouvre l'appli Scratch 3 / TurboWarp).
 3. **Fichier → Charger depuis votre ordinateur** → choisis `ArenaClash.sb3`.
-4. Clique sur le drapeau vert 🟩.
+4. Clique sur le drapeau vert 🟩, puis choisis ta langue : **FRANÇAIS** ou **ENGLISH**.
 
 > Fonctionne aussi dans TurboWarp (plus fluide) : <https://turbowarp.org/editor>
+
+## 🌍 Langues (FR / EN)
+
+À chaque mise en route (drapeau vert), l'écran **CHOISIS TA LANGUE** s'affiche d'abord.
+Le choix (`langue` = `fr` / `en`) s'applique à **tout** le jeu : menus, boutique, armes,
+talents, HUD, messages de combat, noms des bots (« Kid Bleu » → « Blue Kid »,
+« Le Champion » → « The Champion »), arènes, accessoires… et même la boîte de dialogue
+de sauvegarde. Sans choix (ou relance), le français est la langue par défaut.
+
+Mécanique : deux tables de traduction `TR_FR` / `TR_EN` dans `build.py` (clé → texte,
+mêmes clés des deux côtés, vérifiées au build), embarquées dans le projet sous forme de
+listes Scratch (`trKey` / `trFR` / `trEN`) ; toutes les chaînes affichées passent par le
+bloc personnalisé `trad %s` (clé → texte de la langue courante). Les listes de noms
+(`botNom`, `accNom`, `skinNom`, `armeNom`, `botAreneNom`, talents, descriptions d'armes)
+stockent des clés, pas des textes. Pour ajouter une langue, il suffit d'ajouter une
+table `TR_XX` + une liste, et d'étendre le bloc `trad`.
 
 ## 🎮 Commandes
 
@@ -123,6 +139,10 @@ dans `build.py` (les listes Scratch, la boutique, les sauvegardes et les descrip
 ## ✅ Vérifications faites
 
 - Le `.sb3` passe la validation officielle de `scratch-vm` (schéma SB3) et s'exécute sans erreur.
+- **Langues** (`tools/_t_langue.js`, 15 contrôles verts) : écran de choix au drapeau vert,
+  menu / sélection / combat / boutique en FR et en EN, nom de bot traduit
+  (« The Champion »), re-choix après re-lancement du drapeau, invite et toast de
+  sauvegarde traduits (« Not enough coins! » / « Pas assez de pièces ! »).
 - Parcours testés en headless : menu → sélection → combat → K.O. → round 2 → victoire → pièces → déblocage → boutique (achat, équipement, « pas assez de pièces ») → commandes, ainsi que la défaite et la garde.
 - Armes testées une par une : dégâts de chaque attaque avec chaque arme, allonge (l'épée touche à 120 px,
   les poings non), marteau qui perce la garde (60 %), bouclier qui annule les dégâts bloqués, arc (flèche 13, salve 3 x 10).

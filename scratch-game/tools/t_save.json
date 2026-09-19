@@ -1,13 +1,148 @@
-{"steps":[
- {"wait":5,"mouse":[-400,-400]},
- {"set":{"niveauMax":5,"pieces":1234,"P1Acc":"couronne","P1Skin":4,"P1Teinte":30,"P1Lum":15,"P1Arme":5,"P1ArmeOrig":5},"wait":1},
- {"name":"menu","wait":2},
- {"mouse":[28,-112],"down":true},{"mouse":[28,-112],"down":false,"wait":3},
- {"name":"save","wait":2,"dump":["scene","codeSauvegarde"]},
- {"mouse":[0,-110],"down":true},{"mouse":[0,-110],"down":false,"wait":3},
- {"set":{"niveauMax":1,"pieces":0,"P1Acc":"aucun","P1Skin":1,"P1Arme":1,"P1ArmeOrig":1},"wait":1},
- {"answer":"0000000000000000","mouse":[134,-112],"down":true},{"mouse":[134,-112],"down":false,"wait":6},
- {"name":"bad","wait":2,"dump":["infoSauvegarde","niveauMax","pieces","P1Arme"]},
- {"answer":"5-01234-001-01-94-11","mouse":[134,-112],"down":true,"wait":80},{"mouse":[134,-112],"down":false,"wait":6},
- {"name":"loaded","wait":2,"dump":["infoSauvegarde","niveauMax","pieces","P1Acc","P1Skin","P1Teinte","P1Arme"]}
-]}
+{
+ "steps": [
+  {
+   "wait": 5,
+   "mouse": [
+    -400,
+    -400
+   ]
+  },
+  {
+   "mouse": [
+    0,
+    8
+   ],
+   "down": true
+  },
+  {
+   "mouse": [
+    0,
+    8
+   ],
+   "down": false,
+   "wait": 4
+  },
+  {
+   "set": {
+    "niveauMax": 5,
+    "pieces": 1234,
+    "P1Acc": "couronne",
+    "P1Skin": 4,
+    "P1Teinte": 30,
+    "P1Lum": 15,
+    "P1Arme": 5,
+    "P1ArmeOrig": 5
+   },
+   "wait": 1
+  },
+  {
+   "name": "menu",
+   "wait": 2
+  },
+  {
+   "mouse": [
+    28,
+    -112
+   ],
+   "down": true
+  },
+  {
+   "mouse": [
+    28,
+    -112
+   ],
+   "down": false,
+   "wait": 3
+  },
+  {
+   "name": "save",
+   "wait": 2,
+   "dump": [
+    "scene",
+    "codeSauvegarde"
+   ]
+  },
+  {
+   "mouse": [
+    0,
+    -110
+   ],
+   "down": true
+  },
+  {
+   "mouse": [
+    0,
+    -110
+   ],
+   "down": false,
+   "wait": 3
+  },
+  {
+   "set": {
+    "niveauMax": 1,
+    "pieces": 0,
+    "P1Acc": "aucun",
+    "P1Skin": 1,
+    "P1Arme": 1,
+    "P1ArmeOrig": 1
+   },
+   "wait": 1
+  },
+  {
+   "answer": "0000000000000000",
+   "mouse": [
+    134,
+    -112
+   ],
+   "down": true
+  },
+  {
+   "mouse": [
+    134,
+    -112
+   ],
+   "down": false,
+   "wait": 6
+  },
+  {
+   "name": "bad",
+   "wait": 2,
+   "dump": [
+    "infoSauvegarde",
+    "niveauMax",
+    "pieces",
+    "P1Arme"
+   ]
+  },
+  {
+   "answer": "5-01234-001-01-94-11",
+   "mouse": [
+    134,
+    -112
+   ],
+   "down": true,
+   "wait": 80
+  },
+  {
+   "mouse": [
+    134,
+    -112
+   ],
+   "down": false,
+   "wait": 6
+  },
+  {
+   "name": "loaded",
+   "wait": 2,
+   "dump": [
+    "infoSauvegarde",
+    "niveauMax",
+    "pieces",
+    "P1Acc",
+    "P1Skin",
+    "P1Teinte",
+    "P1Arme"
+   ]
+  }
+ ]
+}
